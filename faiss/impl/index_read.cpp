@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <faiss/config.h>
+
 #include <faiss/impl/index_read_utils.h>
 #include <faiss/index_io.h>
 
@@ -317,6 +319,21 @@ static void read_ArrayInvertedLists_sizes(
     }
 }
 
+void read_ivf_dist(IndexIVF* ivf, IOReader* f) {
+    // read from main file only
+    read_index_header(ivf, f);
+    READ1(ivf->nlist);
+    READ1(ivf->nprobe);
+    ivf->quantizer = read_index(f);
+    ivf->own_fields = true;
+    read_direct_map(&ivf->direct_map, f);
+
+    // read the list to file mapping
+    ivf->list_to_file.resize(ivf->nlist);
+    for (size_t i = 0; i < ivf->nlist; i++)
+        READ1(ivf->list_to_file[i]);
+}
+
 InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
     uint32_t h;
     READ1(h);
@@ -326,6 +343,7 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
                 " WARN! inverted lists not stored with IVF object\n");
         return nullptr;
     } else if (h == fourcc("ilar") && !(io_flags & IO_FLAG_SKIP_IVF_DATA)) {
+        // load ivf inverted lists to ram
         auto ails = new ArrayInvertedLists(0, 0);
         READ1(ails->nlist);
         READ1(ails->code_size);
@@ -929,9 +947,13 @@ Index* read_index(IOReader* f, int io_flags) {
         idx = ivfl;
     } else if (h == fourcc("IwFl")) {
         IndexIVFFlat* ivfl = new IndexIVFFlat();
+    #if DIST_FAISS
+        read_ivf_dist(ivfl, f);
+    #else
         read_ivf_header(ivfl, f);
         ivfl->code_size = ivfl->d * sizeof(float);
         read_InvertedLists(ivfl, f, io_flags);
+    #endif
         idx = ivfl;
     } else if (h == fourcc("IxSQ")) {
         IndexScalarQuantizer* idxs = new IndexScalarQuantizer();

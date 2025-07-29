@@ -1,4 +1,10 @@
+#!/bin/zsh
+
+source ~/.zshrc
+
 rm -rf build
+
+conda activate faiss_arm64
 
 cmake -B build -DFAISS_ENABLE_GPU=OFF \
   -DBUILD_TESTING=OFF \

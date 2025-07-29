@@ -14,6 +14,9 @@
 #include <string>
 #include <typeinfo>
 #include <vector>
+#include <faiss/config.h>
+#include <faiss/impl/FaissAssert.h>
+#include <faiss/invlists/InvertedLists.h>
 
 /** I/O functions can read/write to a filename, a file handle or to an
  * object that abstracts the medium.

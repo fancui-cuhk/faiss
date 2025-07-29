@@ -21,6 +21,7 @@ struct ScalarQuantizer;
 
 void read_index_header(Index* idx, IOReader* f);
 void read_direct_map(DirectMap* dm, IOReader* f);
+void read_ivf_dist(IndexIVF* ivf, IOReader* f);
 void read_ivf_header(
         IndexIVF* ivf,
         IOReader* f,

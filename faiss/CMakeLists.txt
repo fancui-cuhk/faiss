@@ -103,6 +103,7 @@ set(FAISS_SRC
 set(FAISS_HEADERS
   AutoTune.h
   Clustering.h
+  config.h
   IVFlib.h
   Index.h
   Index2Layer.h

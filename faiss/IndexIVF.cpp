@@ -342,6 +342,7 @@ void IndexIVF::search(
                 params ? params->quantizer_params : nullptr);
 
         double t1 = getmillisecs();
+        // prefetch from disk to ram, only for mmaped indexes
         invlists->prefetch_lists(idx.get(), n * nprobe);
 
         search_preassigned(

@@ -201,6 +201,10 @@ struct IndexIVF : Index, IndexIVFInterface {
     /// centroids?
     bool by_residual = true;
 
+    /// map from list/cluster id to file id
+    /// used in distributed index io
+    std::vector<size_t> list_to_file;
+
     /** The Inverted file takes a quantizer (an Index) on input,
      * which implements the function mapping a vector to a list
      * identifier.

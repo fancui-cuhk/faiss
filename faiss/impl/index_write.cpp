@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <faiss/config.h>
+
 #include <faiss/index_io.h>
 
 #include <faiss/impl/io.h>
@@ -247,6 +249,7 @@ void write_InvertedLists(const InvertedLists* ils, IOWriter* f) {
         WRITE1(h);
     } else if (
             const auto& ails = dynamic_cast<const ArrayInvertedLists*>(ils)) {
+        // typically, the inverted list is of type ArrayInvertedLists
         uint32_t h = fourcc("ilar");
         WRITE1(h);
         WRITE1(ails->nlist);
@@ -384,6 +387,77 @@ static void write_direct_map(const DirectMap* dm, IOWriter* f) {
         std::copy(map.begin(), map.end(), v.begin());
         WRITEVECTOR(v);
     }
+}
+
+void write_ivf_dist(const IndexIVF* ivf, IOWriter* f) {
+    // store index header and centroids (quantizer) in the main index file
+    write_index_header(ivf, f);
+    WRITE1(ivf->nlist);
+    WRITE1(ivf->nprobe);
+    write_index(ivf->quantizer, f);
+    write_direct_map(&ivf->direct_map, f);
+
+    // shard inverted lists in separate files
+    const InvertedLists* ils = ivf->invlists;
+    FAISS_THROW_IF_MSG(ils == nullptr, "[DIST] inverted list is nullptr");
+    // only ArrayInvertedLists are supported
+    const auto& ails = dynamic_cast<const ArrayInvertedLists*>(ils);
+    FAISS_THROW_IF_MSG(ails == nullptr, "[DIST] inverted list is not of type ArrayInvertedLists");
+
+    // store the main writer
+    IOWriter* main_writer = f;
+
+    // create a mapping from list id to file id
+    std::vector<size_t> list_to_file(ails->nlist);
+
+    // initialize file id and cluster start id
+    size_t file_id = 0;
+    size_t start_id = 0;
+
+    // loop through inverted lists and write to files
+    while (start_id < ails->nlist) {
+        // calculate cluster end id for this file
+        size_t end_id = start_id;
+        size_t current_size = 0;
+        while (end_id < ails->nlist &&
+            current_size + ails->ids[end_id].size() * (sizeof(idx_t) + ails->code_size) <= SHARD_SIZE * 1024 * 1024) {
+            current_size += ails->ids[end_id].size() * (sizeof(idx_t) + ails->code_size);
+            end_id++;
+        }
+        if (end_id == start_id) {
+            // cluster size is too large, store it into a single file
+            printf("[DIST] cluster %ld is larger than %d MB\n", start_id, SHARD_SIZE);
+            end_id++;
+        }
+
+        // file name for this shard
+        std::string file_name = main_writer->name + "_invlists_" + std::to_string(file_id);
+        // write inverted lists to file
+        FileIOWriter file_writer(file_name.c_str());
+        f = &file_writer;
+        size_t num_list = end_id - start_id;
+        WRITE1(num_list);
+        WRITE1(ails->code_size);
+        std::vector<size_t> sizes;
+        for (size_t i = start_id; i < end_id; i++) {
+            sizes.push_back(ails->ids[i].size());
+        }
+        WRITEVECTOR(sizes);
+        for (size_t i = start_id; i < end_id; i++) {
+            size_t n = ails->ids[i].size();
+            WRITEANDCHECK(ails->codes[i].data(), n * ails->code_size);
+            WRITEANDCHECK(ails->ids[i].data(), n);
+            list_to_file[i] = file_id;
+        }
+
+        // update start id and file id
+        start_id = end_id;
+        file_id++;
+    }
+
+    // write mapping from list id to file id to the main index file
+    f = main_writer;
+    WRITEVECTOR(list_to_file); 
 }
 
 static void write_ivf_header(const IndexIVF* ivf, IOWriter* f) {
@@ -642,8 +716,12 @@ void write_index(const Index* idx, IOWriter* f, int io_flags) {
                     dynamic_cast<const IndexIVFFlat*>(idx)) {
         uint32_t h = fourcc("IwFl");
         WRITE1(h);
+    #if DIST_FAISS
+        write_ivf_dist(ivfl_2, f);
+    #else
         write_ivf_header(ivfl_2, f);
         write_InvertedLists(ivfl_2->invlists, f);
+    #endif
     } else if (
             const IndexIVFScalarQuantizer* ivsc =
                     dynamic_cast<const IndexIVFScalarQuantizer*>(idx)) {
