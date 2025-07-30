@@ -716,12 +716,8 @@ void write_index(const Index* idx, IOWriter* f, int io_flags) {
                     dynamic_cast<const IndexIVFFlat*>(idx)) {
         uint32_t h = fourcc("IwFl");
         WRITE1(h);
-    #if DIST_FAISS
-        write_ivf_dist(ivfl_2, f);
-    #else
         write_ivf_header(ivfl_2, f);
         write_InvertedLists(ivfl_2->invlists, f);
-    #endif
     } else if (
             const IndexIVFScalarQuantizer* ivsc =
                     dynamic_cast<const IndexIVFScalarQuantizer*>(idx)) {
@@ -1134,6 +1130,15 @@ void write_index_binary(const IndexBinary* idx, FILE* f) {
 void write_index_binary(const IndexBinary* idx, const char* fname) {
     FileIOWriter writer(fname);
     write_index_binary(idx, &writer);
+}
+
+void write_index_dist(const Index* idx, IOWriter* f, int io_flags) {
+    const IndexIVFFlat* ivfl_2 = dynamic_cast<const IndexIVFFlat*>(idx);
+    FAISS_THROW_IF_MSG(ivfl_2 == nullptr, "[DIST] currently only support IndexIVFFlat");
+
+    uint32_t h = fourcc("IwFl");
+    WRITE1(h);
+    write_ivf_dist(ivfl_2, f);
 }
 
 } // namespace faiss

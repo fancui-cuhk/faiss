@@ -93,6 +93,10 @@ void write_ProductQuantizer(const ProductQuantizer* pq, IOWriter* f);
 void write_InvertedLists(const InvertedLists* ils, IOWriter* f);
 InvertedLists* read_InvertedLists(IOReader* reader, int io_flags = 0);
 
+// for distributed index io
+void write_index_dist(const Index* idx, IOWriter* writer, int io_flags = 0);
+Index* read_index_dist(IOReader* reader, int io_flags = 0);
+
 } // namespace faiss
 
 #endif

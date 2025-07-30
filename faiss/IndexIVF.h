@@ -320,6 +320,22 @@ struct IndexIVF : Index, IndexIVFInterface {
             const IVFSearchParameters* params = nullptr,
             IndexIVFStats* stats = nullptr) const override;
 
+    void select_clusters(
+            idx_t n,
+            const float* x,
+            idx_t* cluster_ids,
+            idx_t* file_ids,
+            const SearchParameters* params = nullptr) const override;
+
+    void probe_clusters(
+            idx_t n,
+            const float* x,
+            idx_t k,
+            const idx_t* cluster_ids,
+            const float* centroid_dis,
+            float* distances,
+            idx_t* labels) const override;
+
     /** assign the vectors, then call search_preassign */
     void search(
             idx_t n,

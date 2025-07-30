@@ -301,6 +301,26 @@ void IndexIVF::set_direct_map_type(DirectMap::Type type) {
     direct_map.set_type(type, invlists, ntotal);
 }
 
+void IndexIVF::select_clusters(
+        idx_t n,
+        const float* x,
+        idx_t* cluster_ids,
+        idx_t* file_ids,
+        const SearchParameters* params) const {
+    //
+}
+
+void IndexIVF::probe_clusters(
+        idx_t n,
+        const float* x,
+        idx_t k,
+        const idx_t* cluster_ids,
+        const float* centroid_dis,
+        float* distances,
+        idx_t* labels) const {
+    //
+}
+
 /** It is a sad fact of software that a conceptually simple function like this
  * becomes very complex when you factor in several ways of parallelizing +
  * interrupt/error handling + collecting stats + min/max collection. The

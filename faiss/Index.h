@@ -381,6 +381,43 @@ struct Index {
      * @param xids   corresponding ids, size n
      */
     virtual void add_sa_codes(idx_t n, const uint8_t* codes, const idx_t* xids);
+
+    /** select clusters to probe for n vectors of dimension d.
+     *
+     * return the ids of the selected clusters and their corresponding file ids
+     *
+     * @param n           number of vectors
+     * @param x           input vectors to search, size n * d
+     * @param cluster_ids selected cluster ids
+     * @param file_ids    output file ids
+     */
+    virtual void select_clusters(
+            idx_t n,
+            const float* x,
+            idx_t* cluster_ids,
+            idx_t* file_ids,
+            const SearchParameters* params = nullptr) const;
+
+    /** probe clusters for n queries
+     *
+     * return the ids of the selected clusters and their corresponding file ids
+     *
+     * @param n            number of vectors
+     * @param x            input vectors to search, size n * d
+     * @param k            number of extracted vectors
+     * @param cluster_ids  selected cluster ids
+     * @param centroid_dis
+     * @param distances    output distances, size n * k
+     * @param labels       output labels, size n * k
+     */
+    virtual void probe_clusters(
+            idx_t n,
+            const float* x,
+            idx_t k,
+            const idx_t* cluster_ids,
+            const float* centroid_dis,
+            float* distances,
+            idx_t* labels) const;
 };
 
 } // namespace faiss

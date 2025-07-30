@@ -15,6 +15,6 @@ cmake -B build -DFAISS_ENABLE_GPU=OFF \
   -DCMAKE_EXE_LINKER_FLAGS="-Wl,-undefined,dynamic_lookup" \
   .
 
-make -C build -j
+make -C build
 
 sudo make -C build install

@@ -327,6 +327,7 @@ void read_ivf_dist(IndexIVF* ivf, IOReader* f) {
     ivf->quantizer = read_index(f);
     ivf->own_fields = true;
     read_direct_map(&ivf->direct_map, f);
+    ivf->code_size = ivf->d * sizeof(float);
 
     // read the list to file mapping
     ivf->list_to_file.resize(ivf->nlist);
@@ -947,13 +948,9 @@ Index* read_index(IOReader* f, int io_flags) {
         idx = ivfl;
     } else if (h == fourcc("IwFl")) {
         IndexIVFFlat* ivfl = new IndexIVFFlat();
-    #if DIST_FAISS
-        read_ivf_dist(ivfl, f);
-    #else
         read_ivf_header(ivfl, f);
         ivfl->code_size = ivfl->d * sizeof(float);
         read_InvertedLists(ivfl, f, io_flags);
-    #endif
         idx = ivfl;
     } else if (h == fourcc("IxSQ")) {
         IndexScalarQuantizer* idxs = new IndexScalarQuantizer();
@@ -1474,6 +1471,18 @@ IndexBinary* read_index_binary(const char* fname, int io_flags) {
         IndexBinary* idx = read_index_binary(&reader, io_flags);
         return idx;
     }
+}
+
+Index* read_index_dist(IOReader* f, int io_flags) {
+    Index* idx = nullptr;
+    uint32_t h;
+    READ1(h);
+    FAISS_THROW_IF_NOT_MSG(h == fourcc("IwFl"), "[DIST] currently only support IndexIVFFlat");
+
+    IndexIVFFlat* ivfl = new IndexIVFFlat();
+    read_ivf_dist(ivfl, f);
+    idx = ivfl;
+    return idx;
 }
 
 } // namespace faiss
