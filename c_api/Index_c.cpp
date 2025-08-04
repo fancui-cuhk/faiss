@@ -229,8 +229,7 @@ int faiss_select_clusters(
         const float* x,
         float* distances,
         idx_t* labels,
-        idx_t* file_ids,
-        const FaissSearchParameters* params) {
+        idx_t* file_ids) {
     try {
         reinterpret_cast<const faiss::Index*>(index)->select_clusters(
                 n,
@@ -239,7 +238,7 @@ int faiss_select_clusters(
                 distances,
                 labels,
                 file_ids,
-                reinterpret_cast<const faiss::SearchParameters*>(params));
+                nullptr);
     }
     CATCH_AND_HANDLE
 }

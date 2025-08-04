@@ -293,8 +293,7 @@ int faiss_select_clusters(
         const float* x,
         float* distances,
         idx_t* labels,
-        idx_t* file_ids,
-        const FaissSearchParameters* params = nullptr);
+        idx_t* file_ids);
 
 /** probe clusters for n queries. only support IVFFlat.
  *
