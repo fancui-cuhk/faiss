@@ -320,18 +320,22 @@ struct IndexIVF : Index, IndexIVFInterface {
             const IVFSearchParameters* params = nullptr,
             IndexIVFStats* stats = nullptr) const override;
 
+    /** distributed search interface */
     void select_clusters(
             idx_t n,
+            size_t nprobe,
             const float* x,
-            idx_t* cluster_ids,
+            float* distances,
+            idx_t* labels,
             idx_t* file_ids,
             const SearchParameters* params = nullptr) const override;
-
     void probe_clusters(
             idx_t n,
             const float* x,
             idx_t k,
+            size_t nclusters,
             const idx_t* cluster_ids,
+            const idx_t* file_ids,
             const float* centroid_dis,
             float* distances,
             idx_t* labels) const override;

@@ -1141,4 +1141,9 @@ void write_index_dist(const Index* idx, IOWriter* f, int io_flags) {
     write_ivf_dist(ivfl_2, f);
 }
 
+void write_index_dist(const Index* idx, const char* fname, int io_flags) {
+    FileIOWriter writer(fname);
+    write_index_dist(idx, &writer, io_flags);
+}
+
 } // namespace faiss

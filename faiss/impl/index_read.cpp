@@ -1485,4 +1485,17 @@ Index* read_index_dist(IOReader* f, int io_flags) {
     return idx;
 }
 
+Index* read_index_dist(const char* fname, int io_flags) {
+    if ((io_flags & IO_FLAG_MMAP_IFC) == IO_FLAG_MMAP_IFC) {
+        // enable mmap-supporting IOReader
+        auto owner = std::make_shared<MmappedFileMappingOwner>(fname);
+        MappedFileIOReader reader(owner);
+        return read_index_dist(&reader, io_flags);
+    } else {
+        FileIOReader reader(fname);
+        Index* idx = read_index_dist(&reader, io_flags);
+        return idx;
+    }
+}
+
 } // namespace faiss

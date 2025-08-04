@@ -274,6 +274,55 @@ int faiss_Index_sa_decode(
         const uint8_t* bytes,
         float* x);
 
+/** select clusters to probe for n vectors of dimension d. only support IVFFlat.
+ *
+ * return the ids of the selected clusters and their corresponding file ids
+ *
+ * @param index       opaque pointer to index object
+ * @param n           number of vectors
+ * @param nprobe      number of clusters to probe, 0 if unset
+ * @param x           input vectors to search, size n * d
+ * @param distances   output distances from query vectors to selected centroids
+ * @param labels      output selected cluster ids
+ * @param file_ids    output file ids
+ */
+int faiss_select_clusters(
+        const FaissIndex* index,
+        idx_t n,
+        size_t nprobe,
+        const float* x,
+        float* distances,
+        idx_t* labels,
+        idx_t* file_ids,
+        const FaissSearchParameters* params = nullptr);
+
+/** probe clusters for n queries. only support IVFFlat.
+ *
+ * return the ids of the selected clusters and their corresponding file ids
+ *
+ * @param index        opaque pointer to index object
+ * @param n            number of vectors
+ * @param x            input vectors to search, size n * d
+ * @param k            number of extracted vectors
+ * @param nclusters    number of clusters to probe
+ * @param cluster_ids  selected cluster ids
+ * @param file_ids     corresponding file ids for clusters
+ * @param centroid_dis distances from query vectors to selected centroids
+ * @param distances    output distances, size n * k
+ * @param labels       output labels, size n * k
+ */
+int faiss_probe_clusters(
+        const FaissIndex* index,
+        idx_t n,
+        const float* x,
+        idx_t k,
+        size_t nclusters,
+        const idx_t* cluster_ids,
+        const idx_t* file_ids,
+        const float* centroid_dis,
+        float* distances,
+        idx_t* labels);
+
 #ifdef __cplusplus
 }
 #endif

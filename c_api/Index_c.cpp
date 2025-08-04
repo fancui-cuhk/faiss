@@ -221,4 +221,52 @@ int faiss_Index_sa_decode(
     }
     CATCH_AND_HANDLE
 }
+
+int faiss_select_clusters(
+        const FaissIndex* index,
+        idx_t n,
+        size_t nprobe,
+        const float* x,
+        float* distances,
+        idx_t* labels,
+        idx_t* file_ids,
+        const FaissSearchParameters* params) {
+    try {
+        reinterpret_cast<const faiss::Index*>(index)->select_clusters(
+                n,
+                nprobe,
+                x,
+                distances,
+                labels,
+                file_ids,
+                reinterpret_cast<const faiss::SearchParameters*>(params));
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_probe_clusters(
+        const FaissIndex* index,
+        idx_t n,
+        const float* x,
+        idx_t k,
+        size_t nclusters,
+        const idx_t* cluster_ids,
+        const idx_t* file_ids,
+        const float* centroid_dis,
+        float* distances,
+        idx_t* labels) {
+    try {
+        reinterpret_cast<const faiss::Index*>(index)->probe_clusters(
+                n,
+                x,
+                k,
+                nclusters,
+                cluster_ids,
+                file_ids,
+                centroid_dis,
+                distances,
+                labels);
+    }
+    CATCH_AND_HANDLE
+}
 }

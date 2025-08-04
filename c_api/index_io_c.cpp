@@ -18,6 +18,24 @@ using faiss::IOReader;
 using faiss::IOWriter;
 using faiss::VectorTransform;
 
+int faiss_write_index_fname_dist(const FaissIndex* idx, const char* fname) {
+    try {
+        faiss::write_index_dist(reinterpret_cast<const Index*>(idx), fname);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_read_index_fname_dist(
+        const char* fname,
+        int io_flags,
+        FaissIndex** p_out) {
+    try {
+        auto out = faiss::read_index_dist(fname, io_flags);
+        *p_out = reinterpret_cast<FaissIndex*>(out);
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_write_index(const FaissIndex* idx, FILE* f) {
     try {
         faiss::write_index(reinterpret_cast<const Index*>(idx), f);

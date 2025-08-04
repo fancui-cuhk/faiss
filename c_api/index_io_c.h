@@ -22,6 +22,14 @@
 extern "C" {
 #endif
 
+/** [DIST] Write index to files -- distributed version of faiss_write_index_fname.
+ */
+int faiss_write_index_fname_dist(const FaissIndex* idx, const char* fname);
+
+/** [DIST] Read index from file -- distributed version of faiss_read_index_fname.
+ */
+int faiss_read_index_fname_dist(const char* fname, int io_flags, FaissIndex** p_out);
+
 /** Write index to a file.
  * This is equivalent to `faiss::write_index` when a file descriptor is
  * provided.

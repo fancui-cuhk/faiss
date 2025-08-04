@@ -303,22 +303,69 @@ void IndexIVF::set_direct_map_type(DirectMap::Type type) {
 
 void IndexIVF::select_clusters(
         idx_t n,
+        size_t nprobe,
         const float* x,
-        idx_t* cluster_ids,
+        float* distances,
+        idx_t* labels,
         idx_t* file_ids,
         const SearchParameters* params) const {
-    //
+    // [DIST] for now, only support n = 1
+
+    const IVFSearchParameters* ivf_params = nullptr;
+    if (params) {
+        ivf_params = dynamic_cast<const IVFSearchParameters*>(params);
+        FAISS_THROW_IF_NOT_MSG(ivf_params, "IndexIVF params have incorrect type");
+    }
+
+    nprobe = std::min(nlist, nprobe > 0 ? nprobe : this->nprobe);
+    FAISS_THROW_IF_NOT(nprobe > 0);
+
+    // select clusters to probe
+    quantizer->search(
+            n,
+            x,
+            nprobe,
+            distances,
+            labels,
+            ivf_params ? ivf_params->quantizer_params : nullptr);
+    // cluster/list id -> file id
+    for (idx_t i = 0; i < n * nprobe; i++) {
+        idx_t file_id = list_to_file[labels[i]];
+        file_ids[i] = file_id;
+    }
 }
 
 void IndexIVF::probe_clusters(
         idx_t n,
         const float* x,
         idx_t k,
+        size_t nclusters,
         const idx_t* cluster_ids,
+        const idx_t* file_ids,
         const float* centroid_dis,
         float* distances,
         idx_t* labels) const {
-    //
+    // [DIST] for now, only support n = 1
+
+    // TODO: before running search_preassigned, we need to make sure that
+    // the clusters are present in ram (invlists)
+    // something like invlists->prefetch_lists()
+
+    IVFSearchParameters* params = new IVFSearchParameters();
+    params->nprobe = nclusters;
+    IndexIVFStats* ivf_stats = new IndexIVFStats();
+
+    search_preassigned(
+            n,
+            x,
+            k,
+            cluster_ids,
+            centroid_dis,
+            distances,
+            labels,
+            false,
+            params,
+            ivf_stats);
 }
 
 /** It is a sad fact of software that a conceptually simple function like this
@@ -491,7 +538,7 @@ void IndexIVF::search_preassigned(
     }
 
     [[maybe_unused]] bool do_parallel = omp_get_max_threads() >= 2 &&
-            (pmode == 0           ? false
+                     ( pmode == 0  ? false
                      : pmode == 3 ? n > 1
                      : pmode == 1 ? nprobe > 1
                                   : nprobe * n > 1);
