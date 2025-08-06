@@ -10,6 +10,7 @@
 #ifndef FAISS_INDEX_READ_UTILS_H
 #define FAISS_INDEX_READ_UTILS_H
 
+#include <set>
 #include <faiss/IndexIVF.h>
 #include <faiss/impl/io.h>
 
@@ -22,6 +23,7 @@ struct ScalarQuantizer;
 void read_index_header(Index* idx, IOReader* f);
 void read_direct_map(DirectMap* dm, IOReader* f);
 void read_ivf_dist(IndexIVF* ivf, IOReader* f);
+void read_InvertedLists_dist(IndexIVF* ivf, std::set<idx_t>& file_id_set, int io_flags = 0);
 void read_ivf_header(
         IndexIVF* ivf,
         IOReader* f,

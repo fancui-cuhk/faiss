@@ -27,6 +27,7 @@
 #include <faiss/impl/CodePacker.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/IDSelector.h>
+#include <faiss/impl/index_read_utils.h>
 
 namespace faiss {
 
@@ -344,12 +345,15 @@ void IndexIVF::probe_clusters(
         const idx_t* file_ids,
         const float* centroid_dis,
         float* distances,
-        idx_t* labels) const {
+        idx_t* labels) {
     // [DIST] for now, only support n = 1
 
-    // TODO: before running search_preassigned, we need to make sure that
-    // the clusters are present in ram (invlists)
-    // something like invlists->prefetch_lists()
+    // before running search_preassigned, we need to make sure that
+    // the clusters (invlists) are present in ram
+    std::set<idx_t> file_id_set;
+    for (idx_t i = 0; i < nclusters; i++)
+        file_id_set.insert(file_ids[i]);
+    read_InvertedLists_dist(this, file_id_set);
 
     IVFSearchParameters* params = new IVFSearchParameters();
     params->nprobe = nclusters;

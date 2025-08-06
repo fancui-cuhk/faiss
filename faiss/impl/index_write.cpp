@@ -432,7 +432,7 @@ void write_ivf_dist(const IndexIVF* ivf, IOWriter* f) {
 
         // file name for this shard
         std::string file_name = main_writer->name + "_invlists_" + std::to_string(file_id);
-        // write inverted lists to file
+        // write inverted lists to file in sparse mode
         FileIOWriter file_writer(file_name.c_str());
         f = &file_writer;
         size_t num_list = end_id - start_id;
@@ -440,6 +440,8 @@ void write_ivf_dist(const IndexIVF* ivf, IOWriter* f) {
         WRITE1(ails->code_size);
         std::vector<size_t> sizes;
         for (size_t i = start_id; i < end_id; i++) {
+            // sparse mode, equivalent to sprs in write_InvertedLists
+            sizes.push_back(i);
             sizes.push_back(ails->ids[i].size());
         }
         WRITEVECTOR(sizes);

@@ -14,6 +14,7 @@
 #include <string>
 #include <typeinfo>
 #include <vector>
+#include <set>
 #include <faiss/config.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/invlists/InvertedLists.h>

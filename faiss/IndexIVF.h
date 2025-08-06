@@ -338,7 +338,7 @@ struct IndexIVF : Index, IndexIVFInterface {
             const idx_t* file_ids,
             const float* centroid_dis,
             float* distances,
-            idx_t* labels) const override;
+            idx_t* labels) override;
 
     /** assign the vectors, then call search_preassign */
     void search(

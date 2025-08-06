@@ -311,7 +311,7 @@ int faiss_select_clusters(
  * @param labels       output labels, size n * k
  */
 int faiss_probe_clusters(
-        const FaissIndex* index,
+        FaissIndex* index,
         idx_t n,
         const float* x,
         idx_t k,

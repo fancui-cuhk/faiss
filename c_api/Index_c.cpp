@@ -244,7 +244,7 @@ int faiss_select_clusters(
 }
 
 int faiss_probe_clusters(
-        const FaissIndex* index,
+        FaissIndex* index,
         idx_t n,
         const float* x,
         idx_t k,
@@ -255,7 +255,7 @@ int faiss_probe_clusters(
         float* distances,
         idx_t* labels) {
     try {
-        reinterpret_cast<const faiss::Index*>(index)->probe_clusters(
+        reinterpret_cast<faiss::Index*>(index)->probe_clusters(
                 n,
                 x,
                 k,

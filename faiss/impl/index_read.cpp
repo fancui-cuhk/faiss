@@ -331,8 +331,7 @@ void read_ivf_dist(IndexIVF* ivf, IOReader* f) {
 
     // read the list to file mapping
     ivf->list_to_file.resize(ivf->nlist);
-    for (size_t i = 0; i < ivf->nlist; i++)
-        READ1(ivf->list_to_file[i]);
+    READVECTOR(ivf->list_to_file);
 }
 
 InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
@@ -1494,8 +1493,56 @@ Index* read_index_dist(const char* fname, int io_flags) {
     } else {
         FileIOReader reader(fname);
         Index* idx = read_index_dist(&reader, io_flags);
+        idx->fname = std::string(fname);
         return idx;
     }
+}
+
+void read_InvertedLists_dist(IndexIVF* ivf, std::set<idx_t>& file_id_set, int io_flags) {
+    // create a new ArrayInvertedLists to hold the combined data
+    ArrayInvertedLists* ils = new ArrayInvertedLists(ivf->nlist, ivf->code_size);
+
+    // initialize with empty lists
+    ils->ids.resize(ivf->nlist);
+    ils->codes.resize(ivf->nlist);
+    FAISS_THROW_IF_NOT(
+        ils->code_size == InvertedLists::INVALID_CODE_SIZE ||
+        ils->code_size == ivf->code_size);
+
+    // for each file_id in file_id_set, construct filename and read invlists
+    for (const idx_t file_id : file_id_set) {
+        // construct the inverted lists file name
+        FAISS_THROW_IF_MSG(ivf->fname.size() == 0, "fname is empty");
+        std::string invlist_fname = ivf->fname + "_invlists_" + std::to_string(file_id);
+
+        // create an IOReader for the file
+        FileIOReader reader(invlist_fname.c_str());
+        FileIOReader* f = &reader;
+
+        // load this inverted list file to ram
+        size_t num_list;
+        READ1(num_list);
+        READ1(ils->code_size);
+        FAISS_THROW_IF_NOT(ils->code_size == ivf->code_size);
+
+        // read sizes, note that sizes are stored in sparse mode
+        std::vector<size_t> idsizes(num_list * 2);
+        READVECTOR(idsizes);
+
+        for (size_t j = 0; j < idsizes.size(); j += 2) {
+            size_t list_id = idsizes[j];
+            size_t list_size = idsizes[j + 1];
+            FAISS_THROW_IF_NOT(list_id < ils->nlist);
+
+            ils->ids[list_id].resize(list_size);
+            ils->codes[list_id].resize(list_size * ils->code_size);
+            read_vector_with_known_size(ils->codes[list_id], f, list_size * ils->code_size);
+            read_vector_with_known_size(ils->ids[list_id], f, list_size);
+        }
+    }
+
+    ivf->invlists = ils;
+    ivf->own_invlists = true;
 }
 
 } // namespace faiss

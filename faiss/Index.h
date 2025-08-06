@@ -110,6 +110,9 @@ struct Index {
     MetricType metric_type;
     float metric_arg; ///< argument of the metric type
 
+    /// [DIST] file name of the index
+    std::string fname;
+
     explicit Index(idx_t d = 0, MetricType metric = METRIC_L2)
             : d(d),
               ntotal(0),
@@ -427,7 +430,7 @@ struct Index {
             const idx_t* file_ids,
             const float* centroid_dis,
             float* distances,
-            idx_t* labels) const {
+            idx_t* labels) {
         FAISS_THROW_MSG("[DIST] probe_clusters cannot be called from the base class.");
     };
 };
