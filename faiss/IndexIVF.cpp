@@ -310,7 +310,7 @@ void IndexIVF::select_clusters(
         idx_t* labels,
         idx_t* file_ids,
         const SearchParameters* params) const {
-    // [DIST] for now, only support n = 1
+    // [DIST] for now, only support n = 1, query-level parallelism
 
     const IVFSearchParameters* ivf_params = nullptr;
     if (params) {
@@ -346,7 +346,7 @@ void IndexIVF::probe_clusters(
         const float* centroid_dis,
         float* distances,
         idx_t* labels) {
-    // [DIST] for now, only support n = 1
+    // [DIST] for now, only support n = 1, query-level parallelism
 
     // before running search_preassigned, we need to make sure that
     // the clusters (invlists) are present in ram
