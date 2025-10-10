@@ -1274,7 +1274,7 @@ Index* read_index(const char* fname, int io_flags) {
         MappedFileIOReader reader(owner);
         return read_index(&reader, io_flags);
     } else {
-        FileIOReader reader(fname);
+        FileIOReader reader(fname, DIRECT_READ);
         Index* idx = read_index(&reader, io_flags);
         return idx;
     }
@@ -1491,7 +1491,7 @@ Index* read_index_dist(const char* fname, int io_flags) {
         MappedFileIOReader reader(owner);
         return read_index_dist(&reader, io_flags);
     } else {
-        FileIOReader reader(fname);
+        FileIOReader reader(fname, DIRECT_READ);
         Index* idx = read_index_dist(&reader, io_flags);
         idx->fname = std::string(fname);
         return idx;

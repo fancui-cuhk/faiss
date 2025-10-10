@@ -69,6 +69,8 @@ struct FileIOReader : IOReader {
 
     FileIOReader(const char* fname);
 
+    FileIOReader(const char* fname, bool direct_read);
+
     ~FileIOReader() override;
 
     size_t operator()(void* ptr, size_t size, size_t nitems) override;
