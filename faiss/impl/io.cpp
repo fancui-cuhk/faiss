@@ -69,36 +69,6 @@ FileIOReader::FileIOReader(const char* fname) {
     need_close = true;
 }
 
-FileIOReader::FileIOReader(const char* fname, bool direct_read) {
-    name = fname;
-    if (direct_read) {
-#ifdef _MSC_VER
-        f = nullptr;
-        FAISS_THROW_MSG("Direct I/O is not supported on Windows");
-#elif defined __APPLE__
-        f = fopen(fname, "rb");
-        if (f != nullptr) {
-            // Try to enable direct I/O
-            fcntl(fileno(f), F_NOCACHE, 1);
-        }
-#else
-        // Try to open with O_DIRECT
-        int fd = open(fname, O_RDONLY | O_DIRECT);
-        if (fd != -1) {
-            f = fdopen(fd, "rb");
-        } else {
-            // Fall back to normal fopen
-            f = fopen(fname, "rb");
-        }
-#endif
-    } else {
-        f = fopen(fname, "rb");
-    }
-    FAISS_THROW_IF_NOT_FMT(
-            f, "could not open %s for reading: %s", fname, strerror(errno));
-    need_close = true;
-}
-
 FileIOReader::~FileIOReader() {
     if (need_close) {
         int ret = fclose(f);
