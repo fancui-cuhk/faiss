@@ -4,4 +4,4 @@
 #define SHARD_SIZE 10 // in MB
 
 // Direct read configuration
-#define DIRECT_READ 1
+#define DIRECT_READ 0
