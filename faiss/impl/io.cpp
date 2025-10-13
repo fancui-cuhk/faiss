@@ -11,15 +11,6 @@
 #include <cassert>
 #include <cstring>
 
-#ifdef __APPLE__
-#include <fcntl.h>
-#endif
-
-#if !defined(_MSC_VER) && !defined(__APPLE__)
-#include <fcntl.h>
-#include <unistd.h>
-#endif
-
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/io.h>
 
