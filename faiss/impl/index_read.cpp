@@ -1498,7 +1498,7 @@ Index* read_index_dist(const char* fname, int io_flags) {
     }
 }
 
-void read_InvertedLists_dist(IndexIVF* ivf, std::set<idx_t>& file_id_set, int io_flags) {
+void read_InvertedLists_dist(IndexIVF* ivf, std::set<idx_t>& file_id_set, int io_flags, const char* invlist_path) {
     // create a new ArrayInvertedLists to hold the combined data
     ArrayInvertedLists* ils = new ArrayInvertedLists(ivf->nlist, ivf->code_size);
 
@@ -1513,7 +1513,15 @@ void read_InvertedLists_dist(IndexIVF* ivf, std::set<idx_t>& file_id_set, int io
     for (const idx_t file_id : file_id_set) {
         // construct the inverted lists file name
         FAISS_THROW_IF_MSG(ivf->fname.size() == 0, "fname is empty");
-        std::string invlist_fname = ivf->fname + "_invlists_" + std::to_string(file_id);
+        
+        std::string invlist_fname;
+        if (invlist_path != nullptr && strlen(invlist_path) > 0) {
+            // Use provided invlist_path directory
+            invlist_fname = std::string(invlist_path) + "/" + ivf->fname + "_invlists_" + std::to_string(file_id);
+        } else {
+            // Fallback to original behavior: same directory as main index file
+            invlist_fname = ivf->fname + "_invlists_" + std::to_string(file_id);
+        }
 
         // create an IOReader for the file
         FileIOReader reader(invlist_fname.c_str());

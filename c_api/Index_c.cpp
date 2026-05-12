@@ -253,7 +253,8 @@ int faiss_probe_clusters(
         const idx_t* file_ids,
         const float* centroid_dis,
         float* distances,
-        idx_t* labels) {
+        idx_t* labels,
+        const char* invlist_path) {
     try {
         reinterpret_cast<faiss::Index*>(index)->probe_clusters(
                 n,
@@ -264,7 +265,8 @@ int faiss_probe_clusters(
                 file_ids,
                 centroid_dis,
                 distances,
-                labels);
+                labels,
+                invlist_path);
     }
     CATCH_AND_HANDLE
 }
