@@ -30,6 +30,14 @@ int faiss_write_index_fname_dist(const FaissIndex* idx, const char* fname);
  */
 int faiss_read_index_fname_dist(const char* fname, int io_flags, FaissIndex** p_out);
 
+/** [DIST] Get cluster-to-file mapping from IndexIVF.
+ * Returns pointer to internal array (do not free) and number of lists.
+ */
+int faiss_get_list_to_file_mapping(
+        const FaissIndex* idx,
+        size_t** list_to_file,
+        size_t* nlist);
+
 /** Write index to a file.
  * This is equivalent to `faiss::write_index` when a file descriptor is
  * provided.

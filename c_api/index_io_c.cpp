@@ -10,6 +10,7 @@
 
 #include "index_io_c.h"
 #include <faiss/index_io.h>
+#include <faiss/IndexIVF.h>
 #include "macros_impl.h"
 
 using faiss::Index;
@@ -32,6 +33,22 @@ int faiss_read_index_fname_dist(
     try {
         auto out = faiss::read_index_dist(fname, io_flags);
         *p_out = reinterpret_cast<FaissIndex*>(out);
+    }
+    CATCH_AND_HANDLE
+}
+
+// [DIST] Get cluster-to-file mapping from IndexIVF
+int faiss_get_list_to_file_mapping(
+        const FaissIndex* idx,
+        size_t** list_to_file,
+        size_t* nlist) {
+    try {
+        const faiss::IndexIVF* ivf = dynamic_cast<const faiss::IndexIVF*>(
+            reinterpret_cast<const faiss::Index*>(idx));
+        FAISS_THROW_IF_MSG(ivf == nullptr, "Index is not of type IndexIVF");
+        
+        *list_to_file = const_cast<size_t*>(ivf->list_to_file.data());
+        *nlist = ivf->list_to_file.size();
     }
     CATCH_AND_HANDLE
 }
