@@ -430,8 +430,7 @@ struct Index {
             const idx_t* file_ids,
             const float* centroid_dis,
             float* distances,
-            idx_t* labels,
-            const char* invlist_path = nullptr) {
+            idx_t* labels) {
         FAISS_THROW_MSG("[DIST] probe_clusters cannot be called from the base class.");
     };
 };

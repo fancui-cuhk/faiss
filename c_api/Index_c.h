@@ -320,8 +320,7 @@ int faiss_probe_clusters(
         const idx_t* file_ids,
         const float* centroid_dis,
         float* distances,
-        idx_t* labels,
-        const char* invlist_path);
+        idx_t* labels);
 
 #ifdef __cplusplus
 }

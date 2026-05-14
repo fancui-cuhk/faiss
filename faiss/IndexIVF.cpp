@@ -345,8 +345,7 @@ void IndexIVF::probe_clusters(
         const idx_t* file_ids,
         const float* centroid_dis,
         float* distances,
-        idx_t* labels,
-        const char* invlist_path) {
+        idx_t* labels) {
     // [DIST] for now, only support n = 1, query-level parallelism
 
     // before running search_preassigned, we need to make sure that
@@ -354,7 +353,7 @@ void IndexIVF::probe_clusters(
     std::set<idx_t> file_id_set;
     for (idx_t i = 0; i < nclusters; i++)
         file_id_set.insert(file_ids[i]);
-    read_InvertedLists_dist(this, file_id_set, 0, invlist_path);
+    read_InvertedLists_dist(this, file_id_set, 0);
 
     IVFSearchParameters params;
     params.nprobe = nclusters;
