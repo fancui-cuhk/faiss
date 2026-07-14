@@ -9,7 +9,10 @@
 
 #include "Index_c.h"
 #include <faiss/Index.h>
+#include <faiss/IndexIVF.h>
 #include <faiss/impl/IDSelector.h>
+#include <faiss/impl/index_read_utils.h>
+#include <set>
 #include "macros_impl.h"
 
 extern "C" {
@@ -253,8 +256,18 @@ int faiss_probe_clusters(
         const idx_t* file_ids,
         const float* centroid_dis,
         float* distances,
-        idx_t* labels) {
+        idx_t* labels,
+        const char* invlist_path) {
     try {
+        auto* ivf = dynamic_cast<faiss::IndexIVF*>(
+                reinterpret_cast<faiss::Index*>(index));
+        if (ivf != nullptr && invlist_path != nullptr && invlist_path[0] != '\0') {
+            std::set<faiss::idx_t> file_id_set;
+            for (size_t i = 0; i < nclusters; i++) {
+                file_id_set.insert(file_ids[i]);
+            }
+            faiss::read_InvertedLists_dist(ivf, file_id_set, 0, invlist_path);
+        }
         reinterpret_cast<faiss::Index*>(index)->probe_clusters(
                 n,
                 x,

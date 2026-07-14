@@ -101,6 +101,13 @@ Index* read_index_dist(IOReader* reader, int io_flags = 0);
 void write_index_dist(const Index* idx, const char* fname, int io_flags = 0);
 Index* read_index_dist(const char* fname, int io_flags = 0);
 
+/** Write distributed IVF with explicit cluster groups (each inner vector = one invlist file). */
+void write_index_dist_grouped(
+        const Index* idx,
+        const char* fname,
+        const std::vector<std::vector<size_t>>& groups,
+        int io_flags = 0);
+
 } // namespace faiss
 
 #endif

@@ -462,6 +462,60 @@ void write_ivf_dist(const IndexIVF* ivf, IOWriter* f) {
     WRITEVECTOR(list_to_file); 
 }
 
+void write_ivf_dist_grouped(
+        const IndexIVF* ivf,
+        IOWriter* f,
+        const std::vector<std::vector<size_t>>& groups) {
+    write_index_header(ivf, f);
+    WRITE1(ivf->nlist);
+    WRITE1(ivf->nprobe);
+    write_index(ivf->quantizer, f);
+    write_direct_map(&ivf->direct_map, f);
+
+    const InvertedLists* ils = ivf->invlists;
+    FAISS_THROW_IF_MSG(ils == nullptr, "[DIST] inverted list is nullptr");
+    const auto& ails = dynamic_cast<const ArrayInvertedLists*>(ils);
+    FAISS_THROW_IF_MSG(ails == nullptr, "[DIST] inverted list is not of type ArrayInvertedLists");
+
+    IOWriter* main_writer = f;
+    std::vector<size_t> list_to_file(ails->nlist, SIZE_MAX);
+
+    size_t file_id = 0;
+    for (const auto& group : groups) {
+        FAISS_THROW_IF_MSG(group.empty(), "[DIST] empty cluster group");
+        std::string file_name =
+                main_writer->name + "_invlists_" + std::to_string(file_id);
+        FileIOWriter file_writer(file_name.c_str());
+        f = &file_writer;
+        size_t num_list = group.size();
+        WRITE1(num_list);
+        WRITE1(ails->code_size);
+        std::vector<size_t> sizes;
+        for (size_t list_id : group) {
+            FAISS_THROW_IF_NOT(list_id < ails->nlist);
+            sizes.push_back(list_id);
+            sizes.push_back(ails->ids[list_id].size());
+        }
+        WRITEVECTOR(sizes);
+        for (size_t list_id : group) {
+            size_t n = ails->ids[list_id].size();
+            WRITEANDCHECK(ails->codes[list_id].data(), n * ails->code_size);
+            WRITEANDCHECK(ails->ids[list_id].data(), n);
+            list_to_file[list_id] = file_id;
+        }
+        file_id++;
+    }
+
+    for (size_t i = 0; i < list_to_file.size(); i++) {
+        FAISS_THROW_IF_MSG(
+                list_to_file[i] == SIZE_MAX,
+                "[DIST] cluster not assigned to any file group");
+    }
+
+    f = main_writer;
+    WRITEVECTOR(list_to_file);
+}
+
 static void write_ivf_header(const IndexIVF* ivf, IOWriter* f) {
     write_index_header(ivf, f);
     WRITE1(ivf->nlist);
@@ -1146,6 +1200,19 @@ void write_index_dist(const Index* idx, IOWriter* f, int io_flags) {
 void write_index_dist(const Index* idx, const char* fname, int io_flags) {
     FileIOWriter writer(fname);
     write_index_dist(idx, &writer, io_flags);
+}
+
+void write_index_dist_grouped(
+        const Index* idx,
+        const char* fname,
+        const std::vector<std::vector<size_t>>& groups,
+        int io_flags) {
+    const IndexIVFFlat* ivfl_2 = dynamic_cast<const IndexIVFFlat*>(idx);
+    FAISS_THROW_IF_MSG(ivfl_2 == nullptr, "[DIST] currently only support IndexIVFFlat");
+    FileIOWriter writer(fname);
+    uint32_t h = fourcc("IwFl");
+    WRITE1(h);
+    write_ivf_dist_grouped(ivfl_2, &writer, groups);
 }
 
 } // namespace faiss

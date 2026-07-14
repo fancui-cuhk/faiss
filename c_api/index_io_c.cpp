@@ -11,6 +11,8 @@
 #include "index_io_c.h"
 #include <faiss/index_io.h>
 #include <faiss/IndexIVF.h>
+#include <faiss/IndexFlat.h>
+#include <faiss/invlists/InvertedLists.h>
 #include "macros_impl.h"
 
 using faiss::Index;
@@ -49,6 +51,73 @@ int faiss_get_list_to_file_mapping(
         
         *list_to_file = const_cast<size_t*>(ivf->list_to_file.data());
         *nlist = ivf->list_to_file.size();
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_write_index_fname_dist_grouped(
+        const FaissIndex* idx,
+        const char* fname,
+        size_t n_groups,
+        const size_t* group_sizes,
+        const size_t* group_cluster_ids) {
+    try {
+        std::vector<std::vector<size_t>> groups(n_groups);
+        size_t offset = 0;
+        for (size_t g = 0; g < n_groups; g++) {
+            groups[g].resize(group_sizes[g]);
+            for (size_t j = 0; j < group_sizes[g]; j++) {
+                groups[g][j] = group_cluster_ids[offset + j];
+            }
+            offset += group_sizes[g];
+        }
+        faiss::write_index_dist_grouped(
+                reinterpret_cast<const faiss::Index*>(idx),
+                fname,
+                groups);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_get_ivf_centroids(
+        const FaissIndex* idx,
+        float** centroids,
+        size_t* nlist,
+        size_t* d) {
+    try {
+        const faiss::IndexIVF* ivf = dynamic_cast<const faiss::IndexIVF*>(
+                reinterpret_cast<const faiss::Index*>(idx));
+        FAISS_THROW_IF_MSG(ivf == nullptr, "Index is not of type IndexIVF");
+        const faiss::IndexFlat* flat =
+                dynamic_cast<const faiss::IndexFlat*>(ivf->quantizer);
+        FAISS_THROW_IF_MSG(flat == nullptr, "IVF quantizer is not IndexFlat");
+        *nlist = ivf->nlist;
+        *d = ivf->d;
+        *centroids = const_cast<float*>(flat->get_xb());
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_get_ivf_cluster_sizes(
+        const FaissIndex* idx,
+        size_t** sizes,
+        size_t* nlist,
+        size_t* code_size) {
+    try {
+        const faiss::IndexIVF* ivf = dynamic_cast<const faiss::IndexIVF*>(
+                reinterpret_cast<const faiss::Index*>(idx));
+        FAISS_THROW_IF_MSG(ivf == nullptr, "Index is not of type IndexIVF");
+        const faiss::ArrayInvertedLists* ails =
+                dynamic_cast<const faiss::ArrayInvertedLists*>(ivf->invlists);
+        FAISS_THROW_IF_MSG(ails == nullptr, "IVF invlists is not ArrayInvertedLists");
+        *nlist = ails->nlist;
+        *code_size = ails->code_size;
+        static thread_local std::vector<size_t> tl_sizes;
+        tl_sizes.resize(ails->nlist);
+        for (size_t i = 0; i < ails->nlist; i++) {
+            tl_sizes[i] = ails->ids[i].size();
+        }
+        *sizes = tl_sizes.data();
     }
     CATCH_AND_HANDLE
 }

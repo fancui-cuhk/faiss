@@ -38,6 +38,28 @@ int faiss_get_list_to_file_mapping(
         size_t** list_to_file,
         size_t* nlist);
 
+/** [DIST] Write distributed IVF using explicit cluster groups (one invlist file per group). */
+int faiss_write_index_fname_dist_grouped(
+        const FaissIndex* idx,
+        const char* fname,
+        size_t n_groups,
+        const size_t* group_sizes,
+        const size_t* group_cluster_ids);
+
+/** Get IVF coarse centroids (nlist * d floats). Caller does not free centroids pointer. */
+int faiss_get_ivf_centroids(
+        const FaissIndex* idx,
+        float** centroids,
+        size_t* nlist,
+        size_t* d);
+
+/** Get per-cluster inverted list sizes (number of vectors per list). */
+int faiss_get_ivf_cluster_sizes(
+        const FaissIndex* idx,
+        size_t** sizes,
+        size_t* nlist,
+        size_t* code_size);
+
 /** Write index to a file.
  * This is equivalent to `faiss::write_index` when a file descriptor is
  * provided.

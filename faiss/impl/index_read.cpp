@@ -1500,6 +1500,14 @@ Index* read_index_dist(const char* fname, int io_flags) {
 }
 
 void read_InvertedLists_dist(IndexIVF* ivf, std::set<idx_t>& file_id_set, int io_flags) {
+    read_InvertedLists_dist(ivf, file_id_set, io_flags, nullptr);
+}
+
+void read_InvertedLists_dist(
+        IndexIVF* ivf,
+        std::set<idx_t>& file_id_set,
+        int io_flags,
+        const char* invlist_base_path) {
     // create a new ArrayInvertedLists to hold the combined data
     ArrayInvertedLists* ils = new ArrayInvertedLists(ivf->nlist, ivf->code_size);
 
@@ -1510,26 +1518,26 @@ void read_InvertedLists_dist(IndexIVF* ivf, std::set<idx_t>& file_id_set, int io
         ils->code_size == InvertedLists::INVALID_CODE_SIZE ||
         ils->code_size == ivf->code_size);
 
+    std::string header_base = ivf->fname;
+    if (invlist_base_path != nullptr && invlist_base_path[0] != '\0') {
+        header_base = std::string(invlist_base_path);
+    }
+
     // for each file_id in file_id_set, construct filename and read invlists
     for (const idx_t file_id : file_id_set) {
-        // construct the inverted lists file name
-        FAISS_THROW_IF_MSG(ivf->fname.size() == 0, "fname is empty");
+        FAISS_THROW_IF_MSG(header_base.size() == 0, "invlist header base path is empty");
 
-        // Same directory as the distributed header (see write_ivf_dist in index_write.cpp).
         std::string invlist_fname =
-                ivf->fname + "_invlists_" + std::to_string(file_id);
+                header_base + "_invlists_" + std::to_string(file_id);
 
-        // create an IOReader for the file
         FileIOReader reader(invlist_fname.c_str());
         FileIOReader* f = &reader;
 
-        // load this inverted list file to ram
         size_t num_list;
         READ1(num_list);
         READ1(ils->code_size);
         FAISS_THROW_IF_NOT(ils->code_size == ivf->code_size);
 
-        // read sizes, note that sizes are stored in sparse mode
         std::vector<size_t> idsizes(num_list * 2);
         READVECTOR(idsizes);
 
