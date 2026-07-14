@@ -1210,9 +1210,10 @@ void write_index_dist_grouped(
     const IndexIVFFlat* ivfl_2 = dynamic_cast<const IndexIVFFlat*>(idx);
     FAISS_THROW_IF_MSG(ivfl_2 == nullptr, "[DIST] currently only support IndexIVFFlat");
     FileIOWriter writer(fname);
+    IOWriter* f = &writer;
     uint32_t h = fourcc("IwFl");
     WRITE1(h);
-    write_ivf_dist_grouped(ivfl_2, &writer, groups);
+    write_ivf_dist_grouped(ivfl_2, f, groups);
 }
 
 } // namespace faiss
