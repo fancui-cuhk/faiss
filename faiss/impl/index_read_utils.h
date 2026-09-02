@@ -29,6 +29,20 @@ void read_InvertedLists_dist(
         std::set<idx_t>& file_id_set,
         int io_flags,
         const char* invlist_base_path);
+
+/** Load only the requested inverted lists from distributed shards.
+ *
+ * Uses FileIOReader's FILE* (fseeko/fread). Does not add seek to IOReader.
+ * seek_gap_bytes: merge payload holes <= this size into one fread (0 = never).
+ */
+void read_InvertedLists_dist_selected(
+        IndexIVF* ivf,
+        const idx_t* list_ids,
+        size_t n_lists,
+        const idx_t* file_ids,
+        size_t seek_gap_bytes,
+        const char* invlist_base_path,
+        IndexIVF::InvertedListsIOStats* stats);
 void read_ivf_header(
         IndexIVF* ivf,
         IOReader* f,

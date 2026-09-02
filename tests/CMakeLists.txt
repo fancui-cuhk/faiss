@@ -38,6 +38,7 @@ set(FAISS_TEST_SRC
   test_hamming.cpp
   test_mmap.cpp
   test_zerocopy.cpp
+  test_invlists_skip.cpp
 )
 
 add_executable(faiss_test ${FAISS_TEST_SRC})

@@ -54,6 +54,7 @@ FAISS_DECLARE_GETTER(Index, int, d)
 
 /// Getter for is_trained
 FAISS_DECLARE_GETTER(Index, int, is_trained)
+int faiss_Index_set_is_trained(FaissIndex* index, int is_trained);
 
 /// Getter for ntotal
 FAISS_DECLARE_GETTER(Index, idx_t, ntotal)
@@ -295,6 +296,14 @@ int faiss_select_clusters(
         idx_t* labels,
         idx_t* file_ids);
 
+typedef struct FaissInvertedListsIOStats {
+    size_t table_bytes;
+    size_t payload_bytes;
+    size_t skip_bytes;
+    size_t read_ops;
+    size_t merged_ranges;
+} FaissInvertedListsIOStats;
+
 /** probe clusters for n queries. only support IVFFlat.
  *
  * return the ids of the selected clusters and their corresponding file ids
@@ -309,6 +318,9 @@ int faiss_select_clusters(
  * @param centroid_dis distances from query vectors to selected centroids
  * @param distances    output distances, size n * k
  * @param labels       output labels, size n * k
+ * @param invlist_path  optional directory/prefix for invlist shards (NULL = index fname)
+ * @param seek_gap_bytes merge payload holes <= this size (0 = never merge)
+ * @param io_stats      optional byte-accounting output (NULL to ignore)
  */
 int faiss_probe_clusters(
         FaissIndex* index,
@@ -321,7 +333,9 @@ int faiss_probe_clusters(
         const float* centroid_dis,
         float* distances,
         idx_t* labels,
-        const char* invlist_path);
+        const char* invlist_path,
+        size_t seek_gap_bytes,
+        FaissInvertedListsIOStats* io_stats);
 
 #ifdef __cplusplus
 }

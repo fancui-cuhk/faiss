@@ -348,12 +348,15 @@ void IndexIVF::probe_clusters(
         idx_t* labels) {
     // [DIST] for now, only support n = 1, query-level parallelism
 
-    // before running search_preassigned, we need to make sure that
-    // the clusters (invlists) are present in ram
-    std::set<idx_t> file_id_set;
-    for (idx_t i = 0; i < nclusters; i++)
-        file_id_set.insert(file_ids[i]);
-    read_InvertedLists_dist(this, file_id_set, 0);
+    last_invlist_io_stats = {};
+    read_InvertedLists_dist_selected(
+            this,
+            cluster_ids,
+            nclusters,
+            file_ids,
+            invlist_seek_gap_bytes,
+            nullptr,
+            &last_invlist_io_stats);
 
     IVFSearchParameters params;
     params.nprobe = nclusters;
@@ -1206,7 +1209,10 @@ void IndexIVF::reconstruct_from_offset(
 
 void IndexIVF::reset() {
     direct_map.clear();
-    invlists->reset();
+    invlist_dirs.clear();
+    if (invlists) {
+        invlists->reset();
+    }
     ntotal = 0;
 }
 

@@ -205,6 +205,34 @@ struct IndexIVF : Index, IndexIVFInterface {
     /// used in distributed index io
     std::vector<size_t> list_to_file;
 
+    /// Merge nearby invlist payloads whose hole is <= this many bytes
+    /// (HDD-friendly). 0 = never merge. Used by probe_clusters.
+    size_t invlist_seek_gap_bytes = size_t(2) << 20;
+
+    /// Byte accounting from the last probe_clusters invlist load.
+    struct InvertedListsIOStats {
+        size_t table_bytes = 0;
+        size_t payload_bytes = 0;
+        size_t skip_bytes = 0;
+        size_t read_ops = 0;
+        size_t merged_ranges = 0;
+    };
+    InvertedListsIOStats last_invlist_io_stats;
+
+    /// Per-file idsizes/offset table, filled on first probe, reused after.
+    /// Payload lists are still loaded fresh each probe.
+    struct InvlistOnDiskDir {
+        size_t table_bytes = 0;
+        struct Loc {
+            idx_t list_id = 0;
+            size_t nvec = 0;
+            uint64_t offset = 0;
+            uint64_t bytes = 0;
+        };
+        std::vector<Loc> locs;
+    };
+    std::unordered_map<std::string, InvlistOnDiskDir> invlist_dirs;
+
     /** The Inverted file takes a quantizer (an Index) on input,
      * which implements the function mapping a vector to a list
      * identifier.

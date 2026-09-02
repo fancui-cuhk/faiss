@@ -12,7 +12,7 @@
 #include <faiss/IndexIVF.h>
 #include <faiss/impl/IDSelector.h>
 #include <faiss/impl/index_read_utils.h>
-#include <set>
+#include <string>
 #include "macros_impl.h"
 
 extern "C" {
@@ -36,6 +36,14 @@ DEFINE_DESTRUCTOR(Index)
 DEFINE_GETTER(Index, int, d)
 
 DEFINE_GETTER(Index, int, is_trained)
+
+int faiss_Index_set_is_trained(FaissIndex* index, int is_trained) {
+    try {
+        reinterpret_cast<faiss::Index*>(index)->is_trained = is_trained != 0;
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
 
 DEFINE_GETTER(Index, idx_t, ntotal)
 
@@ -257,18 +265,19 @@ int faiss_probe_clusters(
         const float* centroid_dis,
         float* distances,
         idx_t* labels,
-        const char* invlist_path) {
+        const char* invlist_path,
+        size_t seek_gap_bytes,
+        FaissInvertedListsIOStats* io_stats) {
     try {
         auto* ivf = dynamic_cast<faiss::IndexIVF*>(
                 reinterpret_cast<faiss::Index*>(index));
-        if (ivf != nullptr && invlist_path != nullptr && invlist_path[0] != '\0') {
-            std::set<faiss::idx_t> file_id_set;
-            for (size_t i = 0; i < nclusters; i++) {
-                file_id_set.insert(file_ids[i]);
-            }
-            faiss::read_InvertedLists_dist(ivf, file_id_set, 0, invlist_path);
+        FAISS_THROW_IF_MSG(ivf == nullptr, "probe_clusters requires IndexIVF");
+        std::string old_fname = ivf->fname;
+        if (invlist_path != nullptr && invlist_path[0] != '\0') {
+            ivf->fname = invlist_path;
         }
-        reinterpret_cast<faiss::Index*>(index)->probe_clusters(
+        ivf->invlist_seek_gap_bytes = seek_gap_bytes;
+        ivf->probe_clusters(
                 n,
                 x,
                 k,
@@ -278,6 +287,17 @@ int faiss_probe_clusters(
                 centroid_dis,
                 distances,
                 labels);
+        if (invlist_path != nullptr && invlist_path[0] != '\0') {
+            ivf->fname = old_fname;
+        }
+        if (io_stats != nullptr) {
+            const auto& st = ivf->last_invlist_io_stats;
+            io_stats->table_bytes = st.table_bytes;
+            io_stats->payload_bytes = st.payload_bytes;
+            io_stats->skip_bytes = st.skip_bytes;
+            io_stats->read_ops = st.read_ops;
+            io_stats->merged_ranges = st.merged_ranges;
+        }
     }
     CATCH_AND_HANDLE
 }

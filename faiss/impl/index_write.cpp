@@ -482,7 +482,11 @@ void write_ivf_dist_grouped(
 
     size_t file_id = 0;
     for (const auto& group : groups) {
-        FAISS_THROW_IF_MSG(group.empty(), "[DIST] empty cluster group");
+        if (group.empty()) {
+            // Keep file_id aligned with group index (HDD slot) even if unused.
+            file_id++;
+            continue;
+        }
         std::string file_name =
                 main_writer->name + "_invlists_" + std::to_string(file_id);
         FileIOWriter file_writer(file_name.c_str());

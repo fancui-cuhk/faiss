@@ -12,10 +12,16 @@
 
 #include <faiss/impl/io_macros.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <string>
+#include <sys/types.h>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/io.h>
@@ -1508,49 +1514,257 @@ void read_InvertedLists_dist(
         std::set<idx_t>& file_id_set,
         int io_flags,
         const char* invlist_base_path) {
-    // create a new ArrayInvertedLists to hold the combined data
-    ArrayInvertedLists* ils = new ArrayInvertedLists(ivf->nlist, ivf->code_size);
+    std::vector<idx_t> list_ids;
+    std::vector<idx_t> file_ids;
+    for (size_t list_id = 0; list_id < ivf->nlist; list_id++) {
+        if (list_id < ivf->list_to_file.size() &&
+            file_id_set.count(idx_t(ivf->list_to_file[list_id]))) {
+            list_ids.push_back(idx_t(list_id));
+            file_ids.push_back(idx_t(ivf->list_to_file[list_id]));
+        }
+    }
+    read_InvertedLists_dist_selected(
+            ivf,
+            list_ids.data(),
+            list_ids.size(),
+            file_ids.data(),
+            /*seek_gap_bytes=*/0,
+            invlist_base_path,
+            nullptr);
+}
 
-    // initialize with empty lists
+namespace {
+
+#ifdef _WIN32
+#define FAISS_FSEEK _fseeki64
+#define FAISS_FTELL _ftelli64
+#else
+#define FAISS_FSEEK fseeko
+#define FAISS_FTELL ftello
+#endif
+
+struct InvlistLoc {
+    idx_t list_id = 0;
+    size_t nvec = 0;
+    uint64_t offset = 0;
+    uint64_t bytes = 0;
+};
+
+struct MergedRange {
+    uint64_t start = 0;
+    uint64_t length = 0;
+    std::vector<InvlistLoc> lists;
+};
+
+std::vector<MergedRange> merge_invlist_ranges(
+        std::vector<InvlistLoc> need,
+        size_t seek_gap_bytes) {
+    std::sort(need.begin(), need.end(), [](const InvlistLoc& a, const InvlistLoc& b) {
+        if (a.offset != b.offset) {
+            return a.offset < b.offset;
+        }
+        return a.list_id < b.list_id;
+    });
+    std::vector<MergedRange> out;
+    for (const auto& loc : need) {
+        if (loc.bytes == 0) {
+            continue;
+        }
+        if (out.empty()) {
+            out.push_back({loc.offset, loc.bytes, {loc}});
+            continue;
+        }
+        MergedRange& last = out.back();
+        uint64_t end = last.start + last.length;
+        uint64_t gap = loc.offset > end ? loc.offset - end : 0;
+        if (gap <= seek_gap_bytes) {
+            uint64_t new_end = loc.offset + loc.bytes;
+            if (new_end > end) {
+                last.length = new_end - last.start;
+            }
+            last.lists.push_back(loc);
+        } else {
+            out.push_back({loc.offset, loc.bytes, {loc}});
+        }
+    }
+    return out;
+}
+
+void read_one_invlist_file_selected(
+        IndexIVF* ivf,
+        const std::string& fname,
+        ArrayInvertedLists* ils,
+        const std::unordered_set<idx_t>& wanted,
+        size_t seek_gap_bytes,
+        IndexIVF::InvertedListsIOStats* stats) {
+    FileIOReader reader(fname.c_str());
+    FILE* fp = reader.f;
+    FAISS_THROW_IF_MSG(fp == nullptr, "invlist FILE* is null");
+
+    std::vector<InvlistLoc> locs;
+    auto cached = ivf->invlist_dirs.find(fname);
+    if (cached != ivf->invlist_dirs.end()) {
+        locs.reserve(cached->second.locs.size());
+        for (const auto& src : cached->second.locs) {
+            InvlistLoc loc;
+            loc.list_id = src.list_id;
+            loc.nvec = src.nvec;
+            loc.offset = src.offset;
+            loc.bytes = src.bytes;
+            locs.push_back(loc);
+        }
+    } else {
+        FileIOReader* f = &reader;
+        size_t num_list = 0;
+        size_t code_size = 0;
+        READ1(num_list);
+        READ1(code_size);
+        FAISS_THROW_IF_NOT(code_size == ils->code_size);
+        std::vector<size_t> idsizes;
+        READVECTOR(idsizes);
+        FAISS_THROW_IF_NOT(idsizes.size() == num_list * 2);
+
+        int64_t table_end = FAISS_FTELL(fp);
+        FAISS_THROW_IF_NOT(table_end >= 0);
+        if (stats) {
+            stats->table_bytes += size_t(table_end);
+            stats->read_ops += 1;
+        }
+
+        uint64_t off = uint64_t(table_end);
+        locs.reserve(num_list);
+        IndexIVF::InvlistOnDiskDir dir;
+        dir.table_bytes = size_t(table_end);
+        dir.locs.reserve(num_list);
+        for (size_t j = 0; j < idsizes.size(); j += 2) {
+            InvlistLoc loc;
+            loc.list_id = idx_t(idsizes[j]);
+            loc.nvec = idsizes[j + 1];
+            FAISS_THROW_IF_NOT(size_t(loc.list_id) < ils->nlist);
+            loc.offset = off;
+            loc.bytes = uint64_t(loc.nvec) * code_size +
+                    uint64_t(loc.nvec) * sizeof(idx_t);
+            off += loc.bytes;
+            locs.push_back(loc);
+            dir.locs.push_back({loc.list_id, loc.nvec, loc.offset, loc.bytes});
+        }
+        ivf->invlist_dirs.emplace(fname, std::move(dir));
+    }
+    std::unordered_set<idx_t> present;
+    for (const auto& loc : locs) {
+        present.insert(loc.list_id);
+    }
+    for (idx_t list_id : wanted) {
+        FAISS_THROW_IF_NOT_FMT(
+                present.count(list_id),
+                "list %ld is not in invlist file %s",
+                long(list_id),
+                fname.c_str());
+    }
+
+    std::vector<InvlistLoc> need;
+    for (const auto& loc : locs) {
+        if (wanted.count(loc.list_id)) {
+            need.push_back(loc);
+        }
+    }
+    auto ranges = merge_invlist_ranges(need, seek_gap_bytes);
+    std::unordered_set<idx_t> wanted_copy = wanted;
+
+    for (const auto& range : ranges) {
+        if (range.length == 0) {
+            continue;
+        }
+        std::vector<uint8_t> buf(range.length);
+        FAISS_THROW_IF_NOT_FMT(
+                FAISS_FSEEK(fp, off_t(range.start), SEEK_SET) == 0,
+                "fseeko failed in %s",
+                fname.c_str());
+        size_t nread = fread(buf.data(), 1, range.length, fp);
+        FAISS_THROW_IF_NOT_FMT(
+                nread == range.length,
+                "short fread in %s: %zd != %zd",
+                fname.c_str(),
+                nread,
+                size_t(range.length));
+        if (stats) {
+            stats->read_ops += 1;
+            stats->merged_ranges += 1;
+        }
+        size_t payload_in_range = 0;
+        for (const auto& loc : range.lists) {
+            if (!wanted_copy.count(loc.list_id)) {
+                continue;
+            }
+            size_t rel = size_t(loc.offset - range.start);
+            FAISS_THROW_IF_NOT(rel + size_t(loc.bytes) <= buf.size());
+            const uint8_t* codes_ptr = buf.data() + rel;
+            size_t code_bytes = loc.nvec * ils->code_size;
+            const idx_t* ids_ptr =
+                    reinterpret_cast<const idx_t*>(codes_ptr + code_bytes);
+            ils->codes[loc.list_id].resize(code_bytes);
+            ils->ids[loc.list_id].resize(loc.nvec);
+            if (code_bytes > 0) {
+                memcpy(ils->codes[loc.list_id].data(), codes_ptr, code_bytes);
+            }
+            if (loc.nvec > 0) {
+                memcpy(
+                        ils->ids[loc.list_id].data(),
+                        ids_ptr,
+                        loc.nvec * sizeof(idx_t));
+            }
+            payload_in_range += size_t(loc.bytes);
+        }
+        if (stats) {
+            stats->payload_bytes += payload_in_range;
+            stats->skip_bytes += size_t(range.length) - payload_in_range;
+        }
+    }
+}
+
+} // namespace
+
+void read_InvertedLists_dist_selected(
+        IndexIVF* ivf,
+        const idx_t* list_ids,
+        size_t n_lists,
+        const idx_t* file_ids,
+        size_t seek_gap_bytes,
+        const char* invlist_base_path,
+        IndexIVF::InvertedListsIOStats* stats) {
+    if (ivf->own_invlists && ivf->invlists) {
+        delete ivf->invlists;
+        ivf->invlists = nullptr;
+    }
+
+    auto* ils = new ArrayInvertedLists(ivf->nlist, ivf->code_size);
     ils->ids.resize(ivf->nlist);
     ils->codes.resize(ivf->nlist);
     FAISS_THROW_IF_NOT(
-        ils->code_size == InvertedLists::INVALID_CODE_SIZE ||
-        ils->code_size == ivf->code_size);
+            ils->code_size == InvertedLists::INVALID_CODE_SIZE ||
+            ils->code_size == ivf->code_size);
 
     std::string header_base = ivf->fname;
     if (invlist_base_path != nullptr && invlist_base_path[0] != '\0') {
         header_base = std::string(invlist_base_path);
     }
+    FAISS_THROW_IF_MSG(header_base.empty(), "invlist header base path is empty");
 
-    // for each file_id in file_id_set, construct filename and read invlists
-    for (const idx_t file_id : file_id_set) {
-        FAISS_THROW_IF_MSG(header_base.size() == 0, "invlist header base path is empty");
+    std::unordered_map<idx_t, std::unordered_set<idx_t>> by_file;
+    for (size_t i = 0; i < n_lists; i++) {
+        FAISS_THROW_IF_NOT(list_ids[i] >= 0 && size_t(list_ids[i]) < ivf->nlist);
+        by_file[file_ids[i]].insert(list_ids[i]);
+    }
 
+    if (stats) {
+        *stats = {};
+    }
+
+    for (const auto& kv : by_file) {
         std::string invlist_fname =
-                header_base + "_invlists_" + std::to_string(file_id);
-
-        FileIOReader reader(invlist_fname.c_str());
-        FileIOReader* f = &reader;
-
-        size_t num_list;
-        READ1(num_list);
-        READ1(ils->code_size);
-        FAISS_THROW_IF_NOT(ils->code_size == ivf->code_size);
-
-        std::vector<size_t> idsizes(num_list * 2);
-        READVECTOR(idsizes);
-
-        for (size_t j = 0; j < idsizes.size(); j += 2) {
-            size_t list_id = idsizes[j];
-            size_t list_size = idsizes[j + 1];
-            FAISS_THROW_IF_NOT(list_id < ils->nlist);
-
-            ils->ids[list_id].resize(list_size);
-            ils->codes[list_id].resize(list_size * ils->code_size);
-            read_vector_with_known_size(ils->codes[list_id], f, list_size * ils->code_size);
-            read_vector_with_known_size(ils->ids[list_id], f, list_size);
-        }
+                header_base + "_invlists_" + std::to_string(kv.first);
+        read_one_invlist_file_selected(
+                ivf, invlist_fname, ils, kv.second, seek_gap_bytes, stats);
     }
 
     ivf->invlists = ils;
