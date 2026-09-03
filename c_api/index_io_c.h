@@ -46,6 +46,19 @@ int faiss_write_index_fname_dist_grouped(
         const size_t* group_sizes,
         const size_t* group_cluster_ids);
 
+/** [STREAMING] Merge per-slice IVF block index files into a single IVF index
+ * backed by an OnDiskInvertedLists file. The trained index file provides the
+ * empty IVF shell (quantizer + params). Output: out_index_fname (header) +
+ * ivfdata_fname (inverted lists data), where the header references ivfdata by
+ * the path given here (use IO_FLAG_ONDISK_SAME_DIR when reading).
+ */
+int faiss_merge_ivf_ondisk(
+        const char* trained_index_fname,
+        const char* const* block_fnames,
+        size_t n_blocks,
+        const char* ivfdata_fname,
+        const char* out_index_fname);
+
 /** Get IVF coarse centroids (nlist * d floats). Caller does not free centroids pointer. */
 int faiss_get_ivf_centroids(
         const FaissIndex* idx,
@@ -80,6 +93,7 @@ int faiss_write_index_custom(
 
 #define FAISS_IO_FLAG_MMAP 1
 #define FAISS_IO_FLAG_READ_ONLY 2
+#define FAISS_IO_FLAG_ONDISK_SAME_DIR 4
 
 /** Read index from a file.
  * This is equivalent to `faiss:read_index` when a file descriptor is given.

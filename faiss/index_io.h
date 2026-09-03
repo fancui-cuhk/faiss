@@ -108,6 +108,16 @@ void write_index_dist_grouped(
         const std::vector<std::vector<size_t>>& groups,
         int io_flags = 0);
 
+/** Merge per-slice IVF block indexes into one IVF index backed by an
+ * OnDiskInvertedLists file (ivfdata_fname), writing the header index to
+ * out_index_fname. The trained index file supplies the empty IVF shell.
+ */
+void merge_ivf_ondisk(
+        const char* trained_index_fname,
+        const std::vector<std::string>& block_fnames,
+        const char* ivfdata_fname,
+        const char* out_index_fname);
+
 } // namespace faiss
 
 #endif

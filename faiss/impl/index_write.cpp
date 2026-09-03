@@ -14,8 +14,13 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
+#include <string>
+#include <vector>
 
+#include <faiss/invlists/InvertedLists.h>
 #include <faiss/invlists/InvertedListsIOHook.h>
+#include <faiss/invlists/OnDiskInvertedLists.h>
 
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/utils/hamming.h>
@@ -400,28 +405,25 @@ void write_ivf_dist(const IndexIVF* ivf, IOWriter* f) {
     // shard inverted lists in separate files
     const InvertedLists* ils = ivf->invlists;
     FAISS_THROW_IF_MSG(ils == nullptr, "[DIST] inverted list is nullptr");
-    // only ArrayInvertedLists are supported
-    const auto& ails = dynamic_cast<const ArrayInvertedLists*>(ils);
-    FAISS_THROW_IF_MSG(ails == nullptr, "[DIST] inverted list is not of type ArrayInvertedLists");
 
     // store the main writer
     IOWriter* main_writer = f;
 
     // create a mapping from list id to file id
-    std::vector<size_t> list_to_file(ails->nlist);
+    std::vector<size_t> list_to_file(ils->nlist);
 
     // initialize file id and cluster start id
     size_t file_id = 0;
     size_t start_id = 0;
 
     // loop through inverted lists and write to files
-    while (start_id < ails->nlist) {
+    while (start_id < ils->nlist) {
         // calculate cluster end id for this file
         size_t end_id = start_id;
         size_t current_size = 0;
-        while (end_id < ails->nlist &&
-            current_size + ails->ids[end_id].size() * (sizeof(idx_t) + ails->code_size) <= SHARD_SIZE * 1024 * 1024) {
-            current_size += ails->ids[end_id].size() * (sizeof(idx_t) + ails->code_size);
+        while (end_id < ils->nlist &&
+            current_size + ils->list_size(end_id) * (sizeof(idx_t) + ils->code_size) <= SHARD_SIZE * 1024 * 1024) {
+            current_size += ils->list_size(end_id) * (sizeof(idx_t) + ils->code_size);
             end_id++;
         }
         if (end_id == start_id) {
@@ -437,18 +439,20 @@ void write_ivf_dist(const IndexIVF* ivf, IOWriter* f) {
         f = &file_writer;
         size_t num_list = end_id - start_id;
         WRITE1(num_list);
-        WRITE1(ails->code_size);
+        WRITE1(ils->code_size);
         std::vector<size_t> sizes;
         for (size_t i = start_id; i < end_id; i++) {
             // sparse mode, equivalent to sprs in write_InvertedLists
             sizes.push_back(i);
-            sizes.push_back(ails->ids[i].size());
+            sizes.push_back(ils->list_size(i));
         }
         WRITEVECTOR(sizes);
         for (size_t i = start_id; i < end_id; i++) {
-            size_t n = ails->ids[i].size();
-            WRITEANDCHECK(ails->codes[i].data(), n * ails->code_size);
-            WRITEANDCHECK(ails->ids[i].data(), n);
+            size_t n = ils->list_size(i);
+            InvertedLists::ScopedCodes codes(ils, i);
+            InvertedLists::ScopedIds ids(ils, i);
+            WRITEANDCHECK(codes.get(), n * ils->code_size);
+            WRITEANDCHECK(ids.get(), n);
             list_to_file[i] = file_id;
         }
 
@@ -474,11 +478,9 @@ void write_ivf_dist_grouped(
 
     const InvertedLists* ils = ivf->invlists;
     FAISS_THROW_IF_MSG(ils == nullptr, "[DIST] inverted list is nullptr");
-    const auto& ails = dynamic_cast<const ArrayInvertedLists*>(ils);
-    FAISS_THROW_IF_MSG(ails == nullptr, "[DIST] inverted list is not of type ArrayInvertedLists");
 
     IOWriter* main_writer = f;
-    std::vector<size_t> list_to_file(ails->nlist, SIZE_MAX);
+    std::vector<size_t> list_to_file(ils->nlist, SIZE_MAX);
 
     size_t file_id = 0;
     for (const auto& group : groups) {
@@ -493,18 +495,20 @@ void write_ivf_dist_grouped(
         f = &file_writer;
         size_t num_list = group.size();
         WRITE1(num_list);
-        WRITE1(ails->code_size);
+        WRITE1(ils->code_size);
         std::vector<size_t> sizes;
         for (size_t list_id : group) {
-            FAISS_THROW_IF_NOT(list_id < ails->nlist);
+            FAISS_THROW_IF_NOT(list_id < ils->nlist);
             sizes.push_back(list_id);
-            sizes.push_back(ails->ids[list_id].size());
+            sizes.push_back(ils->list_size(list_id));
         }
         WRITEVECTOR(sizes);
         for (size_t list_id : group) {
-            size_t n = ails->ids[list_id].size();
-            WRITEANDCHECK(ails->codes[list_id].data(), n * ails->code_size);
-            WRITEANDCHECK(ails->ids[list_id].data(), n);
+            size_t n = ils->list_size(list_id);
+            InvertedLists::ScopedCodes codes(ils, list_id);
+            InvertedLists::ScopedIds ids(ils, list_id);
+            WRITEANDCHECK(codes.get(), n * ils->code_size);
+            WRITEANDCHECK(ids.get(), n);
             list_to_file[list_id] = file_id;
         }
         file_id++;
@@ -1218,6 +1222,51 @@ void write_index_dist_grouped(
     uint32_t h = fourcc("IwFl");
     WRITE1(h);
     write_ivf_dist_grouped(ivfl_2, f, groups);
+}
+
+// [STREAMING] Merge per-slice IVF block indexes into a single IVF index whose
+// inverted lists live in an OnDiskInvertedLists file. The trained (empty)
+// index provides the quantizer and parameters; blocks must share the same
+// quantizer and carry globally-assigned ids (shift_ids = false). Block files
+// are memory-mapped, so merge RAM stays bounded by OS page cache pressure.
+void merge_ivf_ondisk(
+        const char* trained_index_fname,
+        const std::vector<std::string>& block_fnames,
+        const char* ivfdata_fname,
+        const char* out_index_fname) {
+    FAISS_THROW_IF_MSG(
+            block_fnames.empty(), "[MERGE] no block indexes to merge");
+
+    std::unique_ptr<Index> trained(read_index(trained_index_fname));
+    IndexIVF* ivf = dynamic_cast<IndexIVF*>(trained.get());
+    FAISS_THROW_IF_MSG(ivf == nullptr, "[MERGE] trained index is not IVF");
+    FAISS_THROW_IF_MSG(
+            ivf->ntotal != 0, "[MERGE] trained index must be empty");
+
+    std::vector<std::unique_ptr<Index>> blocks;
+    std::vector<const InvertedLists*> lists;
+    blocks.reserve(block_fnames.size());
+    lists.reserve(block_fnames.size());
+    for (const auto& bf : block_fnames) {
+        std::unique_ptr<Index> block(read_index(bf.c_str(), IO_FLAG_MMAP));
+        IndexIVF* bivf = dynamic_cast<IndexIVF*>(block.get());
+        FAISS_THROW_IF_MSG(bivf == nullptr, "[MERGE] block index is not IVF");
+        FAISS_THROW_IF_NOT_MSG(
+                bivf->nlist == ivf->nlist,
+                "[MERGE] block nlist does not match trained index");
+        lists.push_back(bivf->invlists);
+        bivf->own_invlists = false;
+        blocks.push_back(std::move(block));
+    }
+
+    OnDiskInvertedLists* od = new OnDiskInvertedLists(
+            ivf->nlist, ivf->code_size, ivfdata_fname);
+    size_t ntotal = od->merge_from_multiple(
+            lists.data(), (int)lists.size(), false, true);
+
+    ivf->ntotal = ntotal;
+    ivf->replace_invlists(od, true);
+    write_index(trained.get(), out_index_fname);
 }
 
 } // namespace faiss

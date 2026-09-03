@@ -79,6 +79,26 @@ int faiss_write_index_fname_dist_grouped(
     CATCH_AND_HANDLE
 }
 
+int faiss_merge_ivf_ondisk(
+        const char* trained_index_fname,
+        const char* const* block_fnames,
+        size_t n_blocks,
+        const char* ivfdata_fname,
+        const char* out_index_fname) {
+    try {
+        std::vector<std::string> blocks(n_blocks);
+        for (size_t i = 0; i < n_blocks; i++) {
+            blocks[i] = block_fnames[i];
+        }
+        faiss::merge_ivf_ondisk(
+                trained_index_fname,
+                blocks,
+                ivfdata_fname,
+                out_index_fname);
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_get_ivf_centroids(
         const FaissIndex* idx,
         float** centroids,
@@ -107,15 +127,14 @@ int faiss_get_ivf_cluster_sizes(
         const faiss::IndexIVF* ivf = dynamic_cast<const faiss::IndexIVF*>(
                 reinterpret_cast<const faiss::Index*>(idx));
         FAISS_THROW_IF_MSG(ivf == nullptr, "Index is not of type IndexIVF");
-        const faiss::ArrayInvertedLists* ails =
-                dynamic_cast<const faiss::ArrayInvertedLists*>(ivf->invlists);
-        FAISS_THROW_IF_MSG(ails == nullptr, "IVF invlists is not ArrayInvertedLists");
-        *nlist = ails->nlist;
-        *code_size = ails->code_size;
+        const faiss::InvertedLists* ils = ivf->invlists;
+        FAISS_THROW_IF_MSG(ils == nullptr, "IVF invlists is nullptr");
+        *nlist = ils->nlist;
+        *code_size = ils->code_size;
         static thread_local std::vector<size_t> tl_sizes;
-        tl_sizes.resize(ails->nlist);
-        for (size_t i = 0; i < ails->nlist; i++) {
-            tl_sizes[i] = ails->ids[i].size();
+        tl_sizes.resize(ils->nlist);
+        for (size_t i = 0; i < ils->nlist; i++) {
+            tl_sizes[i] = ils->list_size(i);
         }
         *sizes = tl_sizes.data();
     }
