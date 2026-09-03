@@ -9,8 +9,10 @@
 // I/O code for indexes
 
 #include "index_io_c.h"
+#include <cstring>
 #include <faiss/index_io.h>
 #include <faiss/IndexIVF.h>
+#include <faiss/IndexHNSW.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/invlists/InvertedLists.h>
 #include "macros_impl.h"
@@ -264,6 +266,76 @@ int faiss_read_VectorTransform_fname(
     try {
         auto out = faiss::read_VectorTransform(fname);
         *p_out = reinterpret_cast<FaissVectorTransform*>(out);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_ivf_copy_list(
+        const FaissIndex* index,
+        size_t list_no,
+        idx_t* ids,
+        uint8_t* codes,
+        size_t* list_size,
+        size_t* code_size) {
+    try {
+        const faiss::IndexIVF* ivf =
+                dynamic_cast<const faiss::IndexIVF*>(
+                        reinterpret_cast<const Index*>(index));
+        FAISS_THROW_IF_MSG(ivf == nullptr, "index is not IndexIVF");
+        const faiss::InvertedLists* ils = ivf->invlists;
+        FAISS_THROW_IF_MSG(ils == nullptr, "IVF invlists is nullptr");
+        FAISS_THROW_IF_MSG(list_no >= ils->nlist, "list_no out of range");
+        size_t ls = ils->list_size(list_no);
+        if (list_size) {
+            *list_size = ls;
+        }
+        if (code_size) {
+            *code_size = ils->code_size;
+        }
+        if (ls == 0) {
+            return 0;
+        }
+        if (ids) {
+            faiss::InvertedLists::ScopedIds scoped(ils, list_no);
+            memcpy(ids, scoped.get(), ls * sizeof(idx_t));
+        }
+        if (codes) {
+            faiss::InvertedLists::ScopedCodes scoped(ils, list_no);
+            memcpy(codes, scoped.get(), ls * ils->code_size);
+        }
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_hnsw_copy_level0_neighbors(
+        const FaissIndex* index,
+        idx_t i,
+        idx_t* out,
+        size_t cap,
+        size_t* nout) {
+    try {
+        const faiss::IndexHNSW* hnsw =
+                dynamic_cast<const faiss::IndexHNSW*>(
+                        reinterpret_cast<const Index*>(index));
+        FAISS_THROW_IF_MSG(hnsw == nullptr, "index is not IndexHNSW");
+        FAISS_THROW_IF_MSG(i < 0 || i >= hnsw->ntotal, "vertex id out of range");
+        size_t begin, end;
+        hnsw->hnsw.neighbor_range(i, 0, &begin, &end);
+        size_t n = 0;
+        for (size_t j = begin; j < end; j++) {
+            faiss::HNSW::storage_idx_t nb = hnsw->hnsw.neighbors[j];
+            if (nb < 0) {
+                continue;
+            }
+            if (out && n < cap) {
+                out[n] = static_cast<idx_t>(nb);
+            }
+            n++;
+        }
+        if (nout) {
+            *nout = n;
+        }
+        FAISS_THROW_IF_MSG(out && n > cap, "neighbor buffer too small");
     }
     CATCH_AND_HANDLE
 }

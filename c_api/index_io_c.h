@@ -159,6 +159,26 @@ int faiss_read_index_binary_custom(
 int faiss_read_VectorTransform_fname(
         const char* fname,
         FaissVectorTransform** p_out);
+
+/** Copy one IVF inverted list (ids + codes) using the abstract InvertedLists
+ * interface (works for OnDiskInvertedLists). ids/codes may be NULL to query
+ * sizes only. codes is list_size * code_size bytes (IVFFlat: float32 vectors).
+ */
+int faiss_ivf_copy_list(
+        const FaissIndex* index,
+        size_t list_no,
+        idx_t* ids,
+        uint8_t* codes,
+        size_t* list_size,
+        size_t* code_size);
+
+/** Copy HNSW level-0 neighbor ids for vertex i (skips -1 slots). */
+int faiss_hnsw_copy_level0_neighbors(
+        const FaissIndex* index,
+        idx_t i,
+        idx_t* out,
+        size_t cap,
+        size_t* nout);
 #ifdef __cplusplus
 }
 #endif

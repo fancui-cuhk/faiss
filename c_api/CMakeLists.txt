@@ -37,6 +37,8 @@ set(FAISS_C_SRC
 
 add_library(faiss_c ${FAISS_C_SRC})
 target_link_libraries(faiss_c PRIVATE faiss)
+find_package(OpenMP REQUIRED)
+target_link_libraries(faiss_c PRIVATE OpenMP::OpenMP_CXX)
 
 add_library(faiss_c_avx2 ${FAISS_C_SRC})
 target_link_libraries(faiss_c_avx2 PRIVATE faiss_avx2)
