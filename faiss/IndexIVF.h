@@ -216,6 +216,8 @@ struct IndexIVF : Index, IndexIVFInterface {
         size_t skip_bytes = 0;
         size_t read_ops = 0;
         size_t merged_ranges = 0;
+        double io_ms = 0;
+        double compute_ms = 0;
     };
     InvertedListsIOStats last_invlist_io_stats;
 

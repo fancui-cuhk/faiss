@@ -10,6 +10,7 @@
 #include "Index_c.h"
 #include <faiss/Index.h>
 #include <faiss/IndexIVF.h>
+#include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/IDSelector.h>
 #include <faiss/impl/index_read_utils.h>
 #include <string>
@@ -297,7 +298,41 @@ int faiss_probe_clusters(
             io_stats->skip_bytes = st.skip_bytes;
             io_stats->read_ops = st.read_ops;
             io_stats->merged_ranges = st.merged_ranges;
+            io_stats->io_ms = st.io_ms;
+            io_stats->compute_ms = st.compute_ms;
         }
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_ivf_init_ram_invlists(FaissIndex* index) {
+    try {
+        auto* ivf = dynamic_cast<faiss::IndexIVF*>(
+                reinterpret_cast<faiss::Index*>(index));
+        FAISS_THROW_IF_MSG(ivf == nullptr, "init_ram_invlists requires IndexIVF");
+        faiss::init_ram_invlists(ivf);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_ivf_absorb_invlists_from_files(
+        FaissIndex* index,
+        const idx_t* list_ids,
+        size_t n,
+        const idx_t* file_ids,
+        const char* invlist_base_path) {
+    try {
+        auto* ivf = dynamic_cast<faiss::IndexIVF*>(
+                reinterpret_cast<faiss::Index*>(index));
+        FAISS_THROW_IF_MSG(ivf == nullptr, "absorb_invlists requires IndexIVF");
+        faiss::absorb_InvertedLists_dist_selected(
+                ivf,
+                list_ids,
+                n,
+                file_ids,
+                /*seek_gap_bytes=*/0,
+                invlist_base_path,
+                nullptr);
     }
     CATCH_AND_HANDLE
 }

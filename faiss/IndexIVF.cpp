@@ -349,6 +349,7 @@ void IndexIVF::probe_clusters(
     // [DIST] for now, only support n = 1, query-level parallelism
 
     last_invlist_io_stats = {};
+    double t_io = getmillisecs();
     read_InvertedLists_dist_selected(
             this,
             cluster_ids,
@@ -357,11 +358,13 @@ void IndexIVF::probe_clusters(
             invlist_seek_gap_bytes,
             nullptr,
             &last_invlist_io_stats);
+    last_invlist_io_stats.io_ms = getmillisecs() - t_io;
 
     IVFSearchParameters params;
     params.nprobe = nclusters;
     IndexIVFStats ivf_stats;
 
+    double t_compute = getmillisecs();
     search_preassigned(
             n,
             x,
@@ -373,6 +376,7 @@ void IndexIVF::probe_clusters(
             false,
             &params,
             &ivf_stats);
+    last_invlist_io_stats.compute_ms = getmillisecs() - t_compute;
 }
 
 /** It is a sad fact of software that a conceptually simple function like this

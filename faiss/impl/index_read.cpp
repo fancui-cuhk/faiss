@@ -1664,9 +1664,13 @@ void read_one_invlist_file_selected(
 
     std::vector<InvlistLoc> need;
     for (const auto& loc : locs) {
-        if (wanted.count(loc.list_id)) {
-            need.push_back(loc);
+        if (!wanted.count(loc.list_id)) {
+            continue;
         }
+        if (ils->ids[loc.list_id].size() > 0) {
+            continue;
+        }
+        need.push_back(loc);
     }
     auto ranges = merge_invlist_ranges(need, seek_gap_bytes);
     std::unordered_set<idx_t> wanted_copy = wanted;
@@ -1694,6 +1698,9 @@ void read_one_invlist_file_selected(
         size_t payload_in_range = 0;
         for (const auto& loc : range.lists) {
             if (!wanted_copy.count(loc.list_id)) {
+                continue;
+            }
+            if (ils->ids[loc.list_id].size() > 0) {
                 continue;
             }
             size_t rel = size_t(loc.offset - range.start);
@@ -1769,6 +1776,65 @@ void read_InvertedLists_dist_selected(
 
     ivf->invlists = ils;
     ivf->own_invlists = true;
+}
+
+void init_ram_invlists(IndexIVF* ivf) {
+    FAISS_THROW_IF_NOT(ivf);
+    auto* fresh = new ArrayInvertedLists(ivf->nlist, ivf->code_size);
+    ivf->replace_invlists(fresh, true);
+    ivf->ntotal = 0;
+}
+
+void absorb_InvertedLists_dist_selected(
+        IndexIVF* ivf,
+        const idx_t* list_ids,
+        size_t n_lists,
+        const idx_t* file_ids,
+        size_t seek_gap_bytes,
+        const char* invlist_base_path,
+        IndexIVF::InvertedListsIOStats* stats) {
+    FAISS_THROW_IF_NOT(ivf);
+    auto* ils = dynamic_cast<ArrayInvertedLists*>(ivf->invlists);
+    if (!ils) {
+        init_ram_invlists(ivf);
+        ils = dynamic_cast<ArrayInvertedLists*>(ivf->invlists);
+        FAISS_THROW_IF_NOT(ils);
+    }
+    FAISS_THROW_IF_NOT(
+            ils->code_size == InvertedLists::INVALID_CODE_SIZE ||
+            ils->code_size == ivf->code_size);
+
+    std::string header_base = ivf->fname;
+    if (invlist_base_path != nullptr && invlist_base_path[0] != '\0') {
+        header_base = std::string(invlist_base_path);
+    }
+    FAISS_THROW_IF_MSG(header_base.empty(), "invlist header base path is empty");
+
+    std::unordered_map<idx_t, std::unordered_set<idx_t>> by_file;
+    for (size_t i = 0; i < n_lists; i++) {
+        FAISS_THROW_IF_NOT(list_ids[i] >= 0 && size_t(list_ids[i]) < ivf->nlist);
+        if (ils->list_size(size_t(list_ids[i])) > 0) {
+            continue;
+        }
+        by_file[file_ids[i]].insert(list_ids[i]);
+    }
+
+    if (stats) {
+        *stats = {};
+    }
+
+    for (const auto& kv : by_file) {
+        std::string invlist_fname =
+                header_base + "_invlists_" + std::to_string(kv.first);
+        read_one_invlist_file_selected(
+                ivf, invlist_fname, ils, kv.second, seek_gap_bytes, stats);
+    }
+
+    idx_t ntotal = 0;
+    for (size_t i = 0; i < ils->nlist; i++) {
+        ntotal += idx_t(ils->list_size(i));
+    }
+    ivf->ntotal = ntotal;
 }
 
 } // namespace faiss

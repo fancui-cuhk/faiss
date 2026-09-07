@@ -302,6 +302,8 @@ typedef struct FaissInvertedListsIOStats {
     size_t skip_bytes;
     size_t read_ops;
     size_t merged_ranges;
+    double io_ms;
+    double compute_ms;
 } FaissInvertedListsIOStats;
 
 /** probe clusters for n queries. only support IVFFlat.
@@ -336,6 +338,21 @@ int faiss_probe_clusters(
         const char* invlist_path,
         size_t seek_gap_bytes,
         FaissInvertedListsIOStats* io_stats);
+
+/** Replace IVF inverted lists with empty ArrayInvertedLists and set ntotal=0.
+ * Keeps the quantizer, list_to_file mapping, and fname.
+ */
+int faiss_ivf_init_ram_invlists(FaissIndex* index);
+
+/** Merge selected inverted lists from `{base}_invlists_{fid}` into RAM.
+ * Already-loaded lists (list_size > 0) are left unchanged.
+ */
+int faiss_ivf_absorb_invlists_from_files(
+        FaissIndex* index,
+        const idx_t* list_ids,
+        size_t n,
+        const idx_t* file_ids,
+        const char* invlist_base_path);
 
 #ifdef __cplusplus
 }
