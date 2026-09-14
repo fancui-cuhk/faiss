@@ -64,6 +64,20 @@ void absorb_InvertedLists_dist_selected(
  */
 void init_ram_invlists(IndexIVF* ivf);
 
+/** Install already-in-memory inverted lists into resident ArrayInvertedLists.
+ *
+ * List ids that already have entries are left unchanged. codes[i] is
+ * nvecs[i] * code_size bytes; ids[i] is nvecs[i] idx_t values.
+ * ntotal becomes the sum of loaded list sizes.
+ */
+void install_invlists_from_memory(
+        IndexIVF* ivf,
+        const idx_t* list_ids,
+        size_t n_lists,
+        const size_t* nvecs,
+        const uint8_t* const* codes,
+        const idx_t* const* ids);
+
 void read_ivf_header(
         IndexIVF* ivf,
         IOReader* f,

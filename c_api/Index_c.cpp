@@ -336,4 +336,21 @@ int faiss_ivf_absorb_invlists_from_files(
     }
     CATCH_AND_HANDLE
 }
+
+int faiss_ivf_install_invlists(
+        FaissIndex* index,
+        const idx_t* list_ids,
+        size_t n,
+        const size_t* nvecs,
+        const uint8_t* const* codes,
+        const idx_t* const* ids) {
+    try {
+        auto* ivf = dynamic_cast<faiss::IndexIVF*>(
+                reinterpret_cast<faiss::Index*>(index));
+        FAISS_THROW_IF_MSG(ivf == nullptr, "install_invlists requires IndexIVF");
+        faiss::install_invlists_from_memory(
+                ivf, list_ids, n, nvecs, codes, ids);
+    }
+    CATCH_AND_HANDLE
+}
 }

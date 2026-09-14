@@ -354,6 +354,17 @@ int faiss_ivf_absorb_invlists_from_files(
         const idx_t* file_ids,
         const char* invlist_base_path);
 
+/** Install already-in-memory inverted lists. Already-loaded lists are skipped.
+ * codes[i] is nvecs[i] * code_size bytes; ids[i] is nvecs[i] labels.
+ */
+int faiss_ivf_install_invlists(
+        FaissIndex* index,
+        const idx_t* list_ids,
+        size_t n,
+        const size_t* nvecs,
+        const uint8_t* const* codes,
+        const idx_t* const* ids);
+
 #ifdef __cplusplus
 }
 #endif

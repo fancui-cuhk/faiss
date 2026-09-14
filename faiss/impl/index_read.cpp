@@ -1785,6 +1785,44 @@ void init_ram_invlists(IndexIVF* ivf) {
     ivf->ntotal = 0;
 }
 
+void install_invlists_from_memory(
+        IndexIVF* ivf,
+        const idx_t* list_ids,
+        size_t n_lists,
+        const size_t* nvecs,
+        const uint8_t* const* codes,
+        const idx_t* const* ids) {
+    FAISS_THROW_IF_NOT(ivf);
+    auto* ils = dynamic_cast<ArrayInvertedLists*>(ivf->invlists);
+    if (!ils) {
+        init_ram_invlists(ivf);
+        ils = dynamic_cast<ArrayInvertedLists*>(ivf->invlists);
+        FAISS_THROW_IF_NOT(ils);
+    }
+    FAISS_THROW_IF_NOT(
+            ils->code_size == InvertedLists::INVALID_CODE_SIZE ||
+            ils->code_size == ivf->code_size);
+    for (size_t i = 0; i < n_lists; i++) {
+        FAISS_THROW_IF_NOT(list_ids[i] >= 0 && size_t(list_ids[i]) < ivf->nlist);
+        size_t list_no = size_t(list_ids[i]);
+        if (ils->list_size(list_no) > 0) {
+            continue;
+        }
+        size_t n = nvecs[i];
+        if (n == 0) {
+            continue;
+        }
+        FAISS_THROW_IF_NOT(codes != nullptr && codes[i] != nullptr);
+        FAISS_THROW_IF_NOT(ids != nullptr && ids[i] != nullptr);
+        ils->add_entries(list_no, n, ids[i], codes[i]);
+    }
+    idx_t ntotal = 0;
+    for (size_t i = 0; i < ils->nlist; i++) {
+        ntotal += idx_t(ils->list_size(i));
+    }
+    ivf->ntotal = ntotal;
+}
+
 void absorb_InvertedLists_dist_selected(
         IndexIVF* ivf,
         const idx_t* list_ids,
